@@ -4,7 +4,9 @@ require("tourr")
 require("Rdimtools")
 require("ggplot2")
 require("tibble")
+require("tidyr")
 require("shinythemes") ## Themes for shiny, think preset css styling.
+require("shiny")
 require("shinyjs")     ## Extend JavaScript (Think HTML interactivity) control and formating, 
 ## Also see ?shinyjs::toggle   &   https://daattali.com/shiny/shinyjs-basic/
 ##### Additionally used in 'primary' and 'devUnderConstruction':
@@ -12,17 +14,25 @@ require("shinyBS")  ## BootStrap functionality, such as tooltips and popovers
 ## Also see ?shinyBS::bsTooltip   &   https://github.com/ebailey78/shinyBS/
 require("DT")       ## HTML tabbles for the gallery table
 
-do_show_dev_disp <- TRUE
+require("mlbench")
+mlb_dat <- data(package = "mlbench")$results[, 3L]
 
+do_show_dev_disp <- TRUE
+palette(RColorBrewer::brewer.pal(8, "Dark2"))
 
 ##### tab1_input -----
 ### Input data, default to flea
 tab1_input <- tabPanel("Input", fluidPage(
     sidebarPanel(width = 3L,
       ## Input csv file
-      fileInput("data_file", "Data file (.csv format)",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")
+      selectInput("data_select", "Data select {mlbench}",
+                  choices = mlb_dat
       ),
+
+      # ## TODO: Apply load data
+      # fileInput("data_file", "Data file (.csv format)",
+      #           accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")
+      # ),
       ## TODO: wrap into raw_dat_dt, really should be converted into a RenderUI
       ## variables in projection, and target variable
       checkboxGroupInput("inc_vars",
@@ -35,15 +45,12 @@ tab1_input <- tabPanel("Input", fluidPage(
                    selected =  names(tourr::flea[])[7]
       ),
       ## Preprocessing
-      radioButtons("scale_mode", "scale data",
+      verbatimTextOutput("na_msg"),
+      radioButtons("scale_mode", "scale",
                    choices = c("std dev",
                                "[0, 1]",
                                "none"),
                    selected = "std dev"),
-                   # list("std dev" = spinifex::scale_sd,
-                   #      "[0, 1]"  = spinifex::scale_10,
-                   #      "none"    = function(x){return(x)}),
-                   # selected = spinifex::scale_sd()),
       checkboxInput("do_sphere", "sphere", 
                     value = FALSE),
       ### TODO: these need to have not too many levels, 8 or so?
@@ -84,12 +91,9 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
            radioButtons("tour_mode", "Tour mode",
                         choices = c("stepwise",
                                     "local",
-                                    "grand",
+                                    "grand"),
                         selected = "stepwise",
-                        # list("Stepwise", #= ,
-                        #      "Local", #= 2,
-                        #      "Grand"), # = 3),
-           )
+                        inline = TRUE)
     ), ## Close column, right
     ### Row 2
     fluidRow(
@@ -104,7 +108,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
              plotOutput("tsne_plot") ## wants + facet_wrap(~var(PC_num))
       ),
     )
-  ))) ## Assign tab2_eda
+    ))) ## Assign tab2_eda
 
 ##### tab3_output -----
 tab3_output <- tabPanel("Output", fluidPage(
