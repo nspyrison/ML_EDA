@@ -47,8 +47,8 @@ ggproto_screeplot_pca <- function(pca_obj){
     # ggplot2::labs(x = "Principal component", y = "% Variance explained",
     #               fill = element_blank(), color = element_blank()),
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 0L)),
-    ggplot2::scale_fill_manual(values = c(palette()[1L], ), labels = "label", name ="name"),
-    ggplot2::scale_colour_manual(values = palette()[2L], labels = NULL)
+    ggplot2::scale_fill_manual(values = palette()[1L]),
+    ggplot2::scale_colour_manual(values = palette()[2L])
   )
 }
 

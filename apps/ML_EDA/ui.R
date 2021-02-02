@@ -3,6 +3,7 @@ require("spinifex")
 require("tourr")
 require("Rdimtools")
 require("ggplot2")
+require("plotly")
 require("tibble")
 require("tidyr")
 require("shinythemes") ## Themes for shiny, think preset css styling.
@@ -18,7 +19,7 @@ require("mlbench")
 mlb_dat <- data(package = "mlbench")$results[, 3L]
 
 do_show_dev_disp <- TRUE
-palette(RColorBrewer::brewer.pal(8, "Dark2"))
+palette(RColorBrewer::brewer.pal(8L, "Dark2"))
 
 ##### tab1_input -----
 ### Input data, default to flea
@@ -75,7 +76,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
   fluidRow(
     ## Left column, screeplot, buttons
     column(width = 6L,
-           h3("screeplot"),
+           h3("Screeplot"),
            plotOutput("pc_screeplot"),
            column(width = 6L,
                   actionButton("sw_less", "< Remove a variable"),
@@ -87,12 +88,12 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
     ## Right column, Stepwise plot, tour mode buttons
     column(width = 6L,
            h3("Linear embedding"),
-           plotOutput("tour_plot"),
+           plotly::plotlyOutput("tour_plotly"),
            radioButtons("tour_mode", "Tour mode",
-                        choices = c("stepwise",
+                        choices = c("stepwise (WIP)",
                                     "local",
                                     "grand"),
-                        selected = "stepwise",
+                        selected = "grand",
                         inline = TRUE)
     ), ## Close column, right
     ### Row 2
@@ -104,7 +105,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
       ),
       ## Left column, pc_density_plot
       column(width = 6L,
-             h3("None-linnear embedding"),
+             h3("Non-linear embedding"),
              plotOutput("tsne_plot") ## wants + facet_wrap(~var(PC_num))
       ),
     )
