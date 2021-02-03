@@ -78,7 +78,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
     ## Left column, screeplot, buttons
     column(width = 6L,
            h3("Screeplot"),
-          plotOutput("pc_screeplot", height = "400px"),
+          plotOutput("pc_screeplot"),
            h4(textOutput("pca_msg")),
            column(width = 6L,
                   actionButton("sw_less", "< Remove a variable"),
@@ -98,20 +98,21 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
                         selected = "grand",
                         inline = TRUE)
     ), ## Close column, right
-    ### Row 2
-    fluidRow(
-      ## Left column, pc_density_plot
-      column(width = 6L,
-             h3("PC densities"),
-             plotOutput("pc_density_plot") ## wants + facet_wrap(~var(PC_num))
-      ),
-      ## Left column, pc_density_plot
-      column(width = 6L,
-             h3("Non-linear embedding"),
-             plotOutput("tsne_plot") ## wants + facet_wrap(~var(PC_num))
-      ),
-    )
-    ))) ## Assign tab2_eda
+  ),
+  ### Row 2
+  fluidRow(
+    ## Left column, pc_density_plot
+    column(width = 6L,
+           h3("PC densities"),
+           plotOutput("pc_density_plot") ## wants + facet_wrap(~var(PC_num))
+    ),
+    ## Left column, pc_density_plot
+    column(width = 6L,
+           h3("Non-linear embedding"),
+           plotOutput("tsne_plot") ## wants + facet_wrap(~var(PC_num))
+    ),
+  )
+)) ## Assign tab2_eda
 
 ##### tab3_output -----
 tab3_output <- tabPanel("Output", fluidPage(

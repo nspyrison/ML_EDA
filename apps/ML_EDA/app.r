@@ -172,10 +172,12 @@ server <- function(input, output, session){
     if(tour_nm == "local"){tour_func <- tourr::local_tour(start = bas)}
     
     ## invisible() quietly() sink(), capture.output() not muting. sink() may be most promising.
-    t_hist <- save_history(
-      data <- dat,
-      tour_path = tour_func,
-      max_bases = 20L
+    mute <- capture.output(
+      t_hist <- save_history(
+        data <- dat,
+        tour_path = tour_func,
+        max_bases = 20L
+      )
     )
     
     .alpha <- min(c(1L, 5L / sqrt(nrow(dat))))
