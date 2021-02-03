@@ -63,8 +63,9 @@ tab1_input <- tabPanel("Input", fluidPage(
     ## Main panel display
     mainPanel(h3("Input data"),
               verbatimTextOutput("raw_dat_str"),
-              h3("Processed data summary"),
-              verbatimTextOutput("proc_dat_smry"),
+              h3("Processed data univariate densities"),
+              plotOutput("proc_dat_density")
+              #verbatimTextOutput("proc_dat_smry"),
     ) ## close mainPanel
 )) ## Assign tab1_input
 
@@ -77,7 +78,8 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
     ## Left column, screeplot, buttons
     column(width = 6L,
            h3("Screeplot"),
-           plotOutput("pc_screeplot"),
+          plotOutput("pc_screeplot", height = "400px"),
+           h4(textOutput("pca_msg")),
            column(width = 6L,
                   actionButton("sw_less", "< Remove a variable"),
            ),
@@ -130,7 +132,7 @@ tab4_about <- tabPanel("About", fluidPage(
 )) ## Assign tab4_about
 
 ##### dev_disp -----
-dev_disp <- if(do_show_dev_disp == T){
+dev_disp <- if(do_show_dev_disp == TRUE){
   fluidPage(
     h3("===== Dev Display below ====="),
     actionButton("dev_browser", "Run browser()"),
