@@ -36,15 +36,15 @@ tab1_input <- tabPanel("Input", fluidPage(
       # ),
       ## TODO: wrap into raw_dat_dt, really should be converted into a RenderUI
       ## variables in projection, and target variable
-      checkboxGroupInput("inc_vars",
-                         label = "Projection variables",
-                         choices =  names(tourr::flea[, 1L:6L]),
-                         selected = names(tourr::flea[, 1L:6L])
-      ),
-      radioButtons("aes_var", label = "Color and shape variable",
-                   choices =  names(tourr::flea[]),
-                   selected =  names(tourr::flea[])[7]
-      ),
+      # checkboxGroupInput("inc_vars",
+      #                    label = "Projection variables",
+      #                    choices =  names(tourr::flea[, 1L:6L]),
+      #                    selected = names(tourr::flea[, 1L:6L])
+      # ),
+      # radioButtons("aes_var", label = "Color and shape variable",
+      #              choices =  names(tourr::flea[]),
+      #              selected =  names(tourr::flea[])[7]
+      # ),
       ## Preprocessing
       verbatimTextOutput("na_msg"),
       radioButtons("scale_mode", "scale",
@@ -54,6 +54,8 @@ tab1_input <- tabPanel("Input", fluidPage(
                    selected = "std dev"),
       checkboxInput("do_sphere", "sphere", 
                     value = FALSE),
+      sliderInput("subsample_slider", label = "Subsample observations [%] -- WIP",
+                  min = 10L, max = 100L, value = 100L, step = 10L)
       ### TODO: these need to have not too many levels, 8 or so?
       ## Aesthetic selection 
       # h3("Aesthic options")
@@ -76,20 +78,24 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
   ### Row 1, PC screeplot, tour 
   fluidRow(
     ## Left column, screeplot, buttons
-    column(width = 6L,
+    column(width = 6L, align = "center",
            h3("Screeplot"),
-          plotOutput("pc_screeplot"),
+           plotOutput("pc_screeplot"),
            h4(textOutput("pca_msg")),
-           column(width = 6L,
+           column(width = 3L,
                   actionButton("sw_less", "< Remove a variable"),
            ),
-           column(width = 6L,
+           column(width = 6L, align = "center",
+                  h3(textOutput("pca_header"))
+           ),
+           column(width = 3L,
                   actionButton("sw_more", "Add a variable >"),
            ),
     ), ## Close column, left
     ## Right column, Stepwise plot, tour mode buttons
     column(width = 6L,
            h3("Linear embedding"),
+           p("A tour -- animations of linear embeddings (orthonormally constrained)"),
            plotly::plotlyOutput("tour_plotly"),
            radioButtons("tour_mode", "Tour mode",
                         choices = c("stepwise (WIP)",
@@ -109,6 +115,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
     ## Left column, pc_density_plot
     column(width = 6L,
            h3("Non-linear embedding"),
+           p("tSNE, non-linear embedding -- distances not Euclidean; be carful with interpretive claims"),
            plotOutput("tsne_plot") ## wants + facet_wrap(~var(PC_num))
     ),
   )

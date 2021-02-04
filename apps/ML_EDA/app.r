@@ -92,6 +92,7 @@ server <- function(input, output, session){
     est_dim <- rv$curr_dim <- min(which(cum_var > 90L))
     est_dim
   })
+  alpha <- reactive({min(c(1L, 5L / sqrt(nrow(raw_dat()))))})
   output$pca_msg <- renderText({
     req(est_idd())
     rv$curr_dim
@@ -102,6 +103,10 @@ server <- function(input, output, session){
            " principle components capture ",
            round(cum_var, 2L), "% of the variance in the processed data.")
   })
+  output$pca_header <- renderText({
+    paste0(rv$curr_dim, " of ", p()," principal components")
+  })
+  
   
   ### Proc dat density -----
   output$proc_dat_density <- renderPlot({
@@ -115,6 +120,8 @@ server <- function(input, output, session){
     
     ggplot() +
       geom_density(aes(value), df_long) +
+      geom_rug(aes(value), df_long,
+               alpha = alpha()) +
       facet_wrap(vars(variable)) +
       theme_minimal() +
       theme(axis.text.y = element_blank())
@@ -127,7 +134,9 @@ server <- function(input, output, session){
     
     list(
       ggproto_screeplot_pca(pca_obj),
-      theme_minimal()
+      theme_minimal(),
+      theme(legend.position = "bottom",
+            legend.direction = "horizontal")
     )
   })
   ggproto_bkg_shade_scree <- reactive({
@@ -176,18 +185,17 @@ server <- function(input, output, session){
       t_hist <- save_history(
         data <- dat,
         tour_path = tour_func,
-        max_bases = 20L
+        max_bases = 2L
       )
     )
     
-    .alpha <- min(c(1L, 5L / sqrt(nrow(dat))))
     spinifex::play_tour_path(t_hist,
                              dat,
                              angle = 0.08,
                              render_type = render_plotly,
                              axes = "left",
                              #tooltip = "all",
-                             identity_args = list(alpha = .alpha)
+                             identity_args = list(alpha = alpha())
                              )
   })
   
@@ -203,6 +211,8 @@ server <- function(input, output, session){
     
     list(
       geom_density(aes(value), df_long),
+      geom_rug(aes(value), df_long,
+               alpha = alpha()),
       facet_wrap(vars(pc)),
       theme_minimal(),
       theme(axis.text.y = element_blank())
@@ -232,7 +242,7 @@ server <- function(input, output, session){
     req(est_idd())
     df_proj <- as.matrix(pca_obj()$x[, 1L:rv$curr_dim])
     .preplex <- (nrow(df_proj) - 1L) / 3L
-    .iter <- 250L
+    .iter <- 500L
     .theta <- .75
     tnsne_obj <- Rtsne::Rtsne(df_proj, dims = 2L, pca = FALSE,
                               perplexity = .preplex,
