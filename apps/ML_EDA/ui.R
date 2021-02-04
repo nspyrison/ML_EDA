@@ -78,15 +78,15 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
   ### Row 1, PC screeplot, tour 
   fluidRow(
     ## Left column, screeplot, buttons
-    column(width = 6L, align = "center",
+    column(width = 6L,
            h3("Screeplot"),
            plotOutput("pc_screeplot"),
-           h4(textOutput("pca_msg")),
+           h4(textOutput("pca_msg"),  align = "center"),
            column(width = 3L,
                   actionButton("sw_less", "< Remove a variable"),
            ),
-           column(width = 6L, align = "center",
-                  h3(textOutput("pca_header"))
+           column(width = 6L,
+                  h3(textOutput("pca_header"),  align = "center")
            ),
            column(width = 3L,
                   actionButton("sw_more", "Add a variable >"),
