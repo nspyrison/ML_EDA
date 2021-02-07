@@ -223,7 +223,7 @@ server <- function(input, output, session){
     truthy_dat <- truthy_dat()
     ret <- list() ## Initialize
     if(aes_var_nm %in% colnames(truthy_dat)){
-      aes_vect <- truthy_dat[aes_var_nm]
+      aes_vect <- as.factor(truthy_dat[aes_var_nm][, 1])
       ret <- list(color = aes_vect, shape = aes_vect)
     }
     return(ret)
@@ -248,16 +248,17 @@ server <- function(input, output, session){
       )
     )
     
-    spinifex::play_tour_path(t_hist,
-                             dat,
-                             angle = 0.08,
-                             render_type = render_plotly,
-                             axes = "left",
-                             #tooltip = "all",
-                             aes_args = spinifex_aes_args(),
-                             identity_args = list(alpha = alpha())
-                             )
+    ggp <- spinifex::play_tour_path(t_hist,
+                                    dat,
+                                    angle = 0.08,
+                                    render_type = render_plotly,
+                                    axes = "left",
+                                    #tooltip = "all",
+                                    aes_args = spinifex_aes_args(),
+                                    identity_args = list(alpha = alpha())
+    ) %>% plotly::config(displayModeBar = FALSE)
     
+    return(ggp)
   })
   
   ### PC density -----
