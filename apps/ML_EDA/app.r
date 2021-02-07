@@ -224,7 +224,8 @@ server <- function(input, output, session){
     ret <- list() ## Initialize
     if(aes_var_nm %in% colnames(truthy_dat)){
       aes_vect <- as.factor(truthy_dat[aes_var_nm][, 1])
-      ret <- list(color = aes_vect, shape = aes_vect)
+      rowname <- type.convert(rownames(truthy_dat))
+      ret <- list(color = aes_vect, shape = aes_vect, rowname = rowname)
     }
     return(ret)
   })
@@ -244,7 +245,7 @@ server <- function(input, output, session){
       t_hist <- save_history(
         data <- dat,
         tour_path = tour_func,
-        max_bases = 2L
+        max_bases = 10L
       )
     )
     
@@ -253,7 +254,7 @@ server <- function(input, output, session){
                                     angle = 0.08,
                                     render_type = render_plotly,
                                     axes = "left",
-                                    #tooltip = "all",
+                                    tooltip = "rowname",
                                     aes_args = spinifex_aes_args(),
                                     identity_args = list(alpha = alpha())
     ) %>% plotly::config(displayModeBar = FALSE)
