@@ -44,8 +44,8 @@ ggproto_screeplot_pca <- function(pca_obj){
                                      color = lab_col),
                         df_screetable_pca, shape = 18L, size = 4L),
     ## Titles and colors
-    # ggplot2::labs(x = "Principal component", y = "% Variance explained",
-    #               fill = element_blank(), color = element_blank()),
+    ggplot2::labs(x = "Principal component", y = "% Variance explained",
+                  fill = element_blank(), color = element_blank()),
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 0L),
                    legend.position = "bottom",
                    legend.direction = "horizontal"),

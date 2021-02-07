@@ -1,4 +1,4 @@
-### "Primary" ui.R -----
+### "global".r -----
 require("spinifex")
 require("tourr")
 require("Rdimtools")
@@ -8,7 +8,8 @@ require("tibble")
 require("tidyr")
 require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shiny")
-require("shinyjs")     ## Extend JavaScript (Think HTML interactivity) control and formating, 
+require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner()
+require("shinyjs")     ## Extend JavaScript (Think HTML interactivity) control and formatting, 
 ## Also see ?shinyjs::toggle   &   https://daattali.com/shiny/shinyjs-basic/
 ##### Additionally used in 'primary' and 'devUnderConstruction':
 require("shinyBS")  ## BootStrap functionality, such as tooltips and popovers
@@ -34,40 +35,26 @@ tab1_input <- tabPanel("Input", fluidPage(
       # fileInput("data_file", "Data file (.csv format)",
       #           accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")
       # ),
-      ## TODO: wrap into raw_dat_dt, really should be converted into a RenderUI
-      ## variables in projection, and target variable
-      # checkboxGroupInput("inc_vars",
-      #                    label = "Projection variables",
-      #                    choices =  names(tourr::flea[, 1L:6L]),
-      #                    selected = names(tourr::flea[, 1L:6L])
-      # ),
-      # radioButtons("aes_var", label = "Color and shape variable",
-      #              choices =  names(tourr::flea[]),
-      #              selected =  names(tourr::flea[])[7]
-      # ),
+      uiOutput("aes_var_nm"),
       ## Preprocessing
-      verbatimTextOutput("na_msg"),
+      textOutput("na_msg"),
       radioButtons("scale_mode", "scale",
                    choices = c("std dev",
                                "[0, 1]",
                                "none"),
                    selected = "std dev"),
-      checkboxInput("do_sphere", "sphere", 
+      checkboxInput("do_sphere", "sphere",
                     value = FALSE),
       sliderInput("subsample_slider", label = "Subsample observations [%] -- WIP",
-                  min = 10L, max = 100L, value = 100L, step = 10L)
-      ### TODO: these need to have not too many levels, 8 or so?
-      ## Aesthetic selection 
-      # h3("Aesthic options")
-      # fluidRow(column(6L, selectInput("col_var_nm", "Point color", "<none>")),
-      #          column(6L, selectInput("pch_var_nm", "Point shape", "<none>")))
+                  min = 10L, max = 100L, value = 100L, step = 10L),
+      textOutput("subsample_msg"),
     ),
     ## Main panel display
     mainPanel(h3("Input data"),
               verbatimTextOutput("raw_dat_str"),
               h3("Processed data univariate densities"),
               plotOutput("proc_dat_density")
-              #verbatimTextOutput("proc_dat_smry"),
+              #textOutput("proc_dat_smry"),
     ) ## close mainPanel
 )) ## Assign tab1_input
 
@@ -80,13 +67,13 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
     ## Left column, screeplot, buttons
     column(width = 6L,
            h3("Screeplot"),
-           plotOutput("pc_screeplot"),
+           plotOutput("pc_screeplot") %>% withSpinner(),
            h4(textOutput("pca_msg"),  align = "center"),
            column(width = 3L,
                   actionButton("sw_less", "< Remove a variable"),
            ),
            column(width = 6L,
-                  h3(textOutput("pca_header"),  align = "center")
+                  h3(textOutput("pca_header"), align = "center")
            ),
            column(width = 3L,
                   actionButton("sw_more", "Add a variable >"),
@@ -96,7 +83,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
     column(width = 6L,
            h3("Linear embedding"),
            p("A tour -- animations of linear embeddings (orthonormally constrained)"),
-           plotly::plotlyOutput("tour_plotly"),
+           plotly::plotlyOutput("tour_plotly") %>% withSpinner(),
            radioButtons("tour_mode", "Tour mode",
                         choices = c("stepwise (WIP)",
                                     "local",
@@ -109,14 +96,14 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
   fluidRow(
     ## Left column, pc_density_plot
     column(width = 6L,
-           h3("PC densities"),
-           plotOutput("pc_density_plot") ## wants + facet_wrap(~var(PC_num))
+           # h3("PC densities"),
+           # plotOutput("pc_density_plot") %>% withSpinner()
     ),
     ## Left column, pc_density_plot
     column(width = 6L,
            h3("Non-linear embedding"),
            p("tSNE, non-linear embedding -- distances not Euclidean; be carful with interpretive claims"),
-           plotOutput("tsne_plot") ## wants + facet_wrap(~var(PC_num))
+           plotly::plotlyOutput("tsne_plotly") %>% withSpinner()
     ),
   )
 )) ## Assign tab2_eda

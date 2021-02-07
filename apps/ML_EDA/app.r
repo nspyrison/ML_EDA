@@ -22,7 +22,7 @@ server <- function(input, output, session){
   rv <- reactiveValues()
   rv$curr_dim <- NA_integer_
   
-  ### raw_dat
+  ### raw_dat, data.frame
   raw_dat <- reactive({
     nm <- input$data_select
     data(list = nm, package = 'mlbench')
@@ -30,47 +30,93 @@ server <- function(input, output, session){
     if(is.null(rownames(ret)) == TRUE) rownames(ret) <- 1L:nrow(ret)
     
     output$raw_dat_str <- renderPrint({str(ret)})
-    return(ret)
+    return(as.data.frame(ret))
   })
-  
   
   ### Vector, logical. Rows that contain any NA value.
   rows_na <- reactive({ ## Vector of each obs, TRUE means >1 obs value not complete
     req(raw_dat())
     apply(raw_dat(), 1L, anyNA)
   })
-  output$na_msg <- renderPrint({
+  output$na_msg <- renderText({
     req(rows_na())
     sum_na <- sum(rows_na())
-    msg <- if(sum_na == 0L){
-      "No NA values found."
+    if(sum_na == 0L){
+      return("No NA values found.")
     }else{
       n <- nrow(raw_dat())
-      pct_na <- round(100L * n / sum_na, 2L)
-      paste0(sum_na, " (", pct_na, "% of ", n,
-             ") rows contained NA values and have been removed.")
+      pct_na <- round(100L * sum_na / n, 2L)
+      return(paste0(sum_na, " (", pct_na, "% of ", n,
+                    ") rows contained NA values and have been removed."))
     }
-    msg
   })
-  
+  rows_subset_nonna <- reactive({
+    subsamp_pct <- input$subsample_slider
+    if(subsamp_pct == 100L)
+      return(TRUE)
+    ## Else, apply subsampling:
+    req(rows_na())
+    raw_dat <- raw_dat()
+    rows_na <- rows_na()
+    
+    nonna_dat <- raw_dat[!rows_na, ]
+    n <- n_row(nonna_dat)
+    tgt_n <- round(n * subsamp_pct / 100L)
+    
+    return(sample(1L:n, tgt_n, replace = FALSE))
+  })
+  ## A data.frame without na rows & within the subsample 
+  truthy_dat <- reactive({
+    ret <- raw_dat()[!rows_na(), ]
+    return(ret[rows_subset_nonna(), ])
+  })
   ## Vector, logical. Columns that are either a factor or character
   cols_fct_char <- reactive({
     req(raw_dat())
-    apply(type.convert(raw_dat()), 2L, function(c) {
+    sapply(type.convert(raw_dat()), function(c) {
       is.character(c) | is.factor(c)
     })
+  })
+  output$aes_var_nm <- renderUI({
+    req(raw_dat())
+    cols_fct_char <- cols_fct_char()
+    if(sum(cols_fct_char) > 0L){## If any fct or char columns look there
+      this_dat <- raw_dat()[, cols_fct_char]
+    }else{ ## else look at whole data for less than 8 levels
+      this_dat <- raw_dat()
+    }
+    ## Target columns with less than 8 unique values
+    cols_lt8 <- apply(this_dat, 2L, function(x) length(unique(x)) <= 8L)
+    opts <- colnames(this_dat)[cols_lt8]
+    if(length(cols_lt8) == 0L) opts <- "<no suitable variable found>"
+      
+    selectInput("aes_var_nm", "Color/shape variable",
+                choices = opts, selected = opts[1L], multiple = FALSE)
+  })
+ 
+  
+  output$subsample_msg <- renderText({
+    subsamp_pct <- input$subsample_slider
+    n <- nrow(raw_dat()[!rows_na(), ])
+    if(subsamp_pct == 100L)
+      return(paste0("All ", n, " non-NA observations used"))
+    ## Else message about subsampling
+    tgt_n <- round(n * subsamp_pct / 100L)
+    return(paste0(tgt_n, " observations randomly sampled (", subsamp_pct, "% of non-NA observations)"))
   })
   
   ### proc_dat 
   proc_dat <- reactive({
-    ## Remove NA rows and columns that arte factors or characters
-    ret <- raw_dat()[!rows_na(), !cols_fct_char()]
+    ## No NA rows, in subset, and exclude columns that are factors or characters
+    ret <- truthy_dat()[, !cols_fct_char()] %>%
+      type.convert()
     ## type.convert, hopefully compresses numeric classes their most performant possible class.
-    ret <- type.convert(ret) ### Warning, converts text to factors and factors to numeric levels
-    ## Scale
+    ## Warning, may converts text to factors and factors to numeric levels
+    
+    ## Scale if needed
     scale_mode <- input$scale_mode
-    if(scale_mode == "std dev"){ret <- spinifex::scale_sd(ret)}
-    if(scale_mode == "[0, 1]") {ret <- spinifex::scale_01(ret)}
+    if(scale_mode == "std dev") ret <- spinifex::scale_sd(ret)
+    if(scale_mode == "[0, 1]")  ret <- spinifex::scale_01(ret)
     ## Sphere if needed
     if(input$do_sphere == TRUE) ret <- tourr::sphere_data(ret)
     
@@ -109,23 +155,26 @@ server <- function(input, output, session){
   
   
   ### Proc dat density -----
-  output$proc_dat_density <- renderPlot({
-    df <- as.data.frame(proc_dat())
-    df_long <-
-      tidyr::pivot_longer(data = df,
-                          cols = tidyr::everything(),
-                          names_to = "variable",
-                          values_to = "value")
-    df_long$variable <- factor(df_long$variable, levels = colnames(df))
-    
-    ggplot() +
-      geom_density(aes(value), df_long) +
-      geom_rug(aes(value), df_long,
-               alpha = alpha()) +
-      facet_wrap(vars(variable)) +
-      theme_minimal() +
-      theme(axis.text.y = element_blank())
-  })
+  output$proc_dat_density <- renderCachedPlot(
+    {
+      req(proc_dat())
+      df <- as.data.frame(proc_dat())
+      df_long <-
+        tidyr::pivot_longer(data = df,
+                            cols = tidyr::everything(),
+                            names_to = "variable",
+                            values_to = "value")
+      df_long$variable <- factor(df_long$variable, levels = colnames(df))
+      
+      ggplot() +
+        geom_density(aes(value), df_long) +
+        geom_rug(aes(value), df_long,
+                 alpha = alpha()) +
+        facet_wrap(vars(variable)) +
+        theme_minimal() +
+        theme(axis.text.y = element_blank())
+    }, cacheKeyExpr = { list(proc_dat(), alpha()) }
+  )
   
   ### PCA screeplot ----
   ggproto_scree <- reactive({
@@ -169,6 +218,16 @@ server <- function(input, output, session){
   })
   
   ### Tour plotly -----
+  spinifex_aes_args <- reactive({
+    aes_var_nm <- input$aes_var_nm
+    truthy_dat <- truthy_dat()
+    ret <- list() ## Initialize
+    if(aes_var_nm %in% colnames(truthy_dat)){
+      aes_vect <- truthy_dat[aes_var_nm]
+      ret <- list(color = aes_vect, shape = aes_vect)
+    }
+    return(ret)
+  })
   output$tour_plotly <- plotly::renderPlotly({
     req(rv$curr_dim)
     pca_obj <- pca_obj()
@@ -195,50 +254,53 @@ server <- function(input, output, session){
                              render_type = render_plotly,
                              axes = "left",
                              #tooltip = "all",
+                             aes_args = spinifex_aes_args(),
                              identity_args = list(alpha = alpha())
                              )
+    
   })
   
   ### PC density -----
-  ggproto_density <- reactive({
-    df_proj <- as.data.frame(pca_obj()$x)
-    df_long <-
-      tidyr::pivot_longer(data = df_proj,
-                          cols = starts_with("PC"),
-                          names_to = "pc",
-                          values_to = "value")
-    df_long$pc <- factor(df_long$pc, levels = paste0("PC", 1L:p()))
-    
-    list(
-      geom_density(aes(value), df_long),
-      geom_rug(aes(value), df_long,
-               alpha = alpha()),
-      facet_wrap(vars(pc)),
-      theme_minimal(),
-      theme(axis.text.y = element_blank())
-    )
-  })
-  ggproto_bkg_shade_density <- reactive({
-    req(est_idd())
-    curr_dim <- rv$curr_dim
-    p <- p()
-    .pc <- paste0("PC", 1L:p)
-    df <- data.frame(pc = factor(.pc, levels = .pc),
-                     fill = c(rep("aquamarine", curr_dim),
-                              rep("firebrick1", p - curr_dim))
-    )
-    
-    geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = I(fill)),
-              df, alpha = 0.3)
-  })
-  output$pc_density_plot <- renderPlot({
-    ggplot() +
-      ggproto_density() +
-      ggproto_bkg_shade_density()
-  })
+  ## TODO: Remove or keep? what does this add?
+  # ggproto_density <- reactive({
+  #   df_proj <- as.data.frame(pca_obj()$x)
+  #   df_long <-
+  #     tidyr::pivot_longer(data = df_proj,
+  #                         cols = starts_with("PC"),
+  #                         names_to = "pc",
+  #                         values_to = "value")
+  #   df_long$pc <- factor(df_long$pc, levels = paste0("PC", 1L:p()))
+  #   
+  #   list(
+  #     geom_density(aes(value), df_long),
+  #     geom_rug(aes(value), df_long,
+  #              alpha = alpha()),
+  #     facet_wrap(vars(pc)),
+  #     theme_minimal(),
+  #     theme(axis.text.y = element_blank())
+  #   )
+  # })
+  # ggproto_bkg_shade_density <- reactive({
+  #   req(est_idd())
+  #   curr_dim <- rv$curr_dim
+  #   p <- p()
+  #   .pc <- paste0("PC", 1L:p)
+  #   df <- data.frame(pc = factor(.pc, levels = .pc),
+  #                    fill = c(rep("aquamarine", curr_dim),
+  #                             rep("firebrick1", p - curr_dim))
+  #   )
+  #   
+  #   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = I(fill)),
+  #             df, alpha = 0.3)
+  # })
+  # output$pc_density_plot <- renderPlot({
+  #   ggplot() +
+  #     ggproto_density() +
+  #     ggproto_bkg_shade_density()
+  # })
   
   ### tsne plot -----
-  output$tsne_plot <- renderPlot({
+  output$tsne_plotly <- plotly::renderPlotly({
     req(est_idd())
     df_proj <- as.matrix(pca_obj()$x[, 1L:rv$curr_dim])
     .preplex <- (nrow(df_proj) - 1L) / 3L
@@ -249,24 +311,50 @@ server <- function(input, output, session){
                               max_iter = .iter,
                               theta = .theta
                               )
-    tnsne_proj <- as.data.frame(tnsne_obj$Y)
-    names(tnsne_proj) <- paste0("tsne", 1L:2L)
-    pos <- function(x, rate = .95){min(x) + diff(range(x)) * rate}
+    truthy_dat <- truthy_dat()
+    tnsne_proj <- data.frame(
+      tsne1 = tnsne_obj$Y[, 1], 
+      tsne2 = tnsne_obj$Y[, 2],
+      rowname = type.convert(rownames(truthy_dat))
+      #, truthy_dat ## if orig data needed.
+    )
+    
+    ## Find position to place hyper parameter text
+    pos <- function(x, rate = .85){min(x) + diff(range(x)) * rate}
     .txt_x <- pos(tnsne_proj$tsne1)
     .txt_y <- pos(tnsne_proj$tsne2)
     
-    ggplot(tnsne_proj) +
-      geom_point(aes(tsne1, tsne2)) +
+    ## Aesthetic variables
+    aes_var_nm <- input$aes_var_nm
+    tsne_aes <- aes(tsne1, tsne2, rowname = rowname) ## Initialize
+    if(aes_var_nm %in% colnames(truthy_dat)){
+      tnsne_proj$aes <- as.factor(truthy_dat[aes_var_nm][,1])
+      tsne_aes <- aes(tsne1, tsne2, rowname = rowname,
+                      color = aes, shape = aes)
+    }
+    
+    gg <- ggplot(tnsne_proj) +
+      geom_point(tsne_aes) +
       theme_minimal() +
+      scale_color_brewer(palette = "Dark2") +
       theme(axis.text = element_blank(),
-            axis.title = element_blank()) +
-        annotate("text", x = .txt_x, y = .txt_y, color = "grey50",
-                 label = paste0("tSNE with hyperparameters \n",
-                                "pc_dims = ", rv$curr_dim, " \n",
-                                "perprelexity = ", round(.preplex, 2L), " \n",
-                                "iterations = ", .iter, " \n",
-                                "theta (learning) = ", .theta)
-        )
+            axis.title = element_blank(),
+            legend.position = "none") +
+      
+      annotate("text", x = .txt_x, y = .txt_y, color = "grey50",
+               label = paste0("tSNE with hyperparameters \n",
+                              "pc_dims = ", rv$curr_dim, " \n",
+                              "perprelexity = ", round(.preplex, 2L), " \n",
+                              "iterations = ", .iter, " \n",
+                              "theta (learning) = ", .theta)
+      )
+    
+    ggp <- plotly::ggplotly(gg, tooltip = "rowname") %>%
+      plotly::layout(showlegend = FALSE,
+                     yaxis = list(showgrid = FALSE, showline = FALSE),
+                     xaxis = list(showgrid = FALSE, showline = FALSE)) %>% 
+      plotly::config(displayModeBar = FALSE)
+    return(ggp)
   })
 
   
