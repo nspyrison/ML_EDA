@@ -2,6 +2,7 @@
 require("spinifex")
 require("tourr")
 require("Rdimtools")
+require("randomForest")
 require("ggplot2")
 require("plotly")
 require("tibble")
@@ -66,9 +67,7 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
   fluidRow(
     ## Left column, screeplot, buttons
     column(width = 6L,
-           h3("Screeplot"),
            plotOutput("pc_screeplot") %>% withSpinner(),
-           h4(textOutput("pca_msg"),  align = "center"),
            column(width = 3L,
                   actionButton("sw_less", "< Remove a variable"),
            ),
@@ -96,8 +95,9 @@ tab2_eda <- tabPanel("Explore PC-space", fluidPage(
   fluidRow(
     ## Left column, pc_density_plot
     column(width = 6L,
-           # h3("PC densities"),
-           # plotOutput("pc_density_plot") %>% withSpinner()
+           h3("Estimating iid"),
+           tableOutput("idd_tbl") %>% withSpinner(),
+           textOutput("est_idd_msg")
     ),
     ## Left column, pc_density_plot
     column(width = 6L,

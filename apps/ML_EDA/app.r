@@ -124,6 +124,24 @@ server <- function(input, output, session){
   })
   output$proc_dat_smry <- renderPrint({summary(proc_dat())})
   
+  clas_df <- reactive({
+    ## TODO: NEED CLASS SELECTION FIRST, class_nm()
+    # truthy_dat()[class_nm()] ## data.frame return
+  })
+  
+  rf_importance <- reactive({
+    ## TODO: NEEDS class/col selection first, class_nm() and selec_col_nms()
+    # truthy_dat <- truthy_dat()
+    # selec_dat <- truthy_dat[selec_nms()]
+    # 
+    # rf <- 
+    #   randomForest(get(clas_nm()) ~ ., datav = selec_dat, ntree = 1000,
+    #                keep.forest = FALSE, importance = TRUE)
+    # imp <- importance(rf)
+    # ## Return
+    # list(imp[order(imp[, 1], decreasing = TRUE), 1],
+    #      imp[order(imp[, 2], decreasing = TRUE), 2])
+  })
   ### Helpers
   p <- reactive({
     req(proc_dat())
@@ -133,14 +151,12 @@ server <- function(input, output, session){
     req(proc_dat())
     prcomp(proc_dat())
   })
-  est_idd <- reactive({
+  est_pca90 <- reactive({
     cum_var <- df_scree_pca(pca_obj())$cumsum_var
-    est_dim <- rv$curr_dim <- min(which(cum_var > 90L))
-    est_dim
+    est_dim <- min(which(cum_var > 90L))
   })
   alpha <- reactive({min(c(1L, 5L / sqrt(nrow(raw_dat()))))})
-  output$pca_msg <- renderText({
-    req(est_idd())
+  pca_msg <- reactive({
     rv$curr_dim
     p <- p()
     cum_var <- df_scree_pca(pca_obj())$cumsum_var[rv$curr_dim]
@@ -149,6 +165,7 @@ server <- function(input, output, session){
            " principle components capture ",
            round(cum_var, 2L), "% of the variance in the processed data.")
   })
+  #output$pca_msg <- renderText(pca_msg())
   output$pca_header <- renderText({
     paste0(rv$curr_dim, " of ", p()," principal components")
   })
@@ -165,6 +182,8 @@ server <- function(input, output, session){
                             names_to = "variable",
                             values_to = "value")
       df_long$variable <- factor(df_long$variable, levels = colnames(df))
+      
+      egar_eval_pls <- est_pca90()
       
       ggplot() +
         geom_density(aes(value), df_long) +
@@ -185,15 +204,17 @@ server <- function(input, output, session){
       ggproto_screeplot_pca(pca_obj),
       theme_minimal(),
       theme(legend.position = "bottom",
-            legend.direction = "horizontal")
+            legend.direction = "horizontal"),
+      labs(title = "PCA Screeplot",
+           subtitle = pca_msg())
     )
   })
   ggproto_bkg_shade_scree <- reactive({
     req(rv$curr_dim)
-    est_idd <- rv$curr_dim
+    est_pca90 <- rv$curr_dim
     p <- p()
     .lb <- .5
-    .mb <- est_idd +.5
+    .mb <- est_pca90 +.5
     .ub <- p + .5
     
     list(
@@ -260,6 +281,36 @@ server <- function(input, output, session){
     ) %>% plotly::config(displayModeBar = FALSE)
     
     return(ggp)
+  })
+  
+  ### Est idd -----
+  idd_tbl <- reactive({
+    req(est_pca90())
+    proc_dat <- proc_dat()
+    df <- data.frame(
+      check.names = FALSE,
+      `pca@90%` = est_pca90(),
+      `%IncMSE@90%` = NA,
+      `IncNodePurity@90%` = NA,
+      #correlation = Rdimtools::est.correlation(proc_dat)$estdim, # correlation dimension
+      ## Error in lm.fit(x, y, offset = offset, singular.ok = singular.ok, ...) : 
+      ####  NA/NaN/Inf in 'y'
+      made = Rdimtools::est.made(proc_dat)$estdim, # manifold-adaptive dimension estimation
+      mle2 = Rdimtools::est.mle2(proc_dat)$estdim, # MLE with Poisson process
+      twonn = Rdimtools::est.twonn(proc_dat)$estdim, # minimal neighborhood information
+      Ustat = Rdimtools::est.Ustat(proc_dat)$estdim # convergence rate of U-statistic on manifold
+    )
+    rownames(df) <- "est_idd"
+    return(df)
+  })
+  output$idd_tbl <- renderTable(idd_tbl())
+  est_idd <- reactive({
+    vec <- as.data.frame(t(as.matrix(idd_tbl())))[, 1]
+    ret <- rv$curr_dim <- ceiling(mean(vec, na.rm = TRUE))
+    return(ret)
+  })
+  output$est_idd_msg <- renderText({
+    paste0("Ceiling of mean estimated iid: ", est_idd())
   })
   
   ### PC density -----

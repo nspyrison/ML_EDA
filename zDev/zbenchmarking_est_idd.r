@@ -22,18 +22,18 @@ message("round one filterng")
 
 ## Looking at time
 microbenchmark::microbenchmark(
-  est.boxcount(m)$estdim, ## Bar, mean of 68.99 ms
+  Rdimtools::est.boxcount(m)$estdim, ## Bar, mean of 68.99 ms
   ## est.clustering(m)$estdim, ## ~ 24.8x slower
-  est.correlation(m)$estdim,
+  Rdimtools::est.correlation(m)$estdim,
   ## est.danco(m)$estdim, ## ~ 26x slower
   ## est.gdistnn(m)$estdim, ## ~ 11x slower
   ## est.incisingball(m)$estdim, ## ~ 22x slower
   ## est.mindkl(m)$estdim, ## ~ 23x slower
-  est.made(m)$estdim,
+  Rdimtools::est.made(m)$estdim,
   ##est.mle1(m)$estdim, ## mle2 uses a correctio term and both are about same speed
-  est.mle2(m)$estdim,
-  est.twonn(m)$estdim,
-  est.Ustat(m)$estdim, ## ~ 5x slower
+  Rdimtools::est.mle2(m)$estdim,
+  Rdimtools::est.twonn(m)$estdim,
+  Rdimtools::est.Ustat(m)$estdim, ## ~ 5x slower
   times = 10L
 )
 
@@ -41,12 +41,12 @@ microbenchmark::microbenchmark(
 data(BostonHousing, package = "mlbench")
 m<- BostonHousing
 {## Looking at values
-funcs <- list(est.boxcount,
-              est.correlation,
-              est.made,
-              est.mle2,
-              est.twonn,
-              est.Ustat)
+funcs <- list(Rdimtools::est.boxcount,
+              Rdimtools::est.correlation,
+              Rdimtools::est.made,
+              Rdimtools::est.mle2,
+              Rdimtools::est.twonn,
+              Rdimtools::est.Ustat)
 ests <- matrix(0, nrow=6, ncol=10)
 tictoc::tic()
 for (i in 1:6){
@@ -64,12 +64,11 @@ ggplot() + geom_density(aes(.), df)
 
 
 vecd = rep(0,5)
-vecd[1] = est.Ustat(m)$estdim # convergence rate of U-statistic on manifold
-vecd[2] = est.correlation(m)$estdim # correlation dimension
-vecd[3] = est.made(m)$estdim # manifold-adaptive dimension estimation
-vecd[4] = est.mle1(m)$estdim # MLE with Poisson process
-vecd[4] = est.mle2(m)$estdim # MLE with Poisson process
-vecd[5] = est.twonn(m)$estdim # minimal neighborhood information
+vecd[1] = Rdimtools::est.Ustat(m)$estdim # convergence rate of U-statistic on manifold
+vecd[2] = Rdimtools::est.correlation(m)$estdim # correlation dimension
+vecd[3] = Rdimtools::est.made(m)$estdim # manifold-adaptive dimension estimation
+vecd[4] = Rdimtools::est.mle2(m)$estdim # MLE with Poisson process
+vecd[5] = Rdimtools::est.twonn(m)$estdim # minimal neighborhood information
 ls_funcs <- list(est.boxcount, est.clustering, est.correlation, est.danco, )
 lapply(1:length(ls_funcs), function(i){ls_funcs[[i]](m)$estdim})
 
@@ -83,7 +82,7 @@ Rtsne::Rtsne(, dims = 2, pca = FALSE,
              max_iter = 250)
 
 
-install.packages("randomForest")
+#install.packages("randomForest")
 library(randomForest)
 set.seed(4543)
 data(mtcars)
