@@ -5,19 +5,20 @@ require("Rdimtools")
 require("randomForest")
 require("ggplot2")
 require("plotly")
+require("mlbench") ## For toy datasets
 require("tibble")
 require("tidyr")
-require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shiny")
+require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner()
-require("shinyjs")     ## Extend JavaScript (Think HTML interactivity) control and formatting, 
+require("shinyjs")  ## Extend JavaScript (Think HTML interactivity) control and formatting, 
 ## Also see ?shinyjs::toggle   &   https://daattali.com/shiny/shinyjs-basic/
 ##### Additionally used in 'primary' and 'devUnderConstruction':
 require("shinyBS")  ## BootStrap functionality, such as tooltips and popovers
 ## Also see ?shinyBS::bsTooltip   &   https://github.com/ebailey78/shinyBS/
 require("DT")       ## HTML tabbles for the gallery table
 
-require("mlbench")
+
 mlb_dat <- data(package = "mlbench")$results[, 3L]
 
 do_show_dev_disp <- TRUE
@@ -31,8 +32,8 @@ tab1_input <- tabPanel("Input", fluidPage(
       selectInput("data_select", "Data select {mlbench}",
                   choices = mlb_dat
       ),
-
-      # ## TODO: Apply load data
+      
+      ## TODO: Apply load data
       # fileInput("data_file", "Data file (.csv format)",
       #           accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")
       # ),

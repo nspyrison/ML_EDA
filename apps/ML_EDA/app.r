@@ -9,11 +9,11 @@
 #' 
 #' @author Nicholas Spyrison
 #' @export
-#' @examples \dontrun{
+#' @examples 
+#' \dontrun{
 #' spinifex::run_app("primary")
 #' }
 
-#TODO: Initalize code base to ML_EDA use.
 
 source("ui.r", local = TRUE)
 source("ggproto_screeplot_pca.r", local = TRUE)
@@ -86,7 +86,7 @@ server <- function(input, output, session){
       this_dat <- raw_dat()
     }
     ## Target columns with less than 8 unique values
-    cols_lt8 <- apply(this_dat, 2L, function(x) length(unique(x)) <= 8L)
+    cols_lt8 <- sapply(this_dat, function(x) length(unique(x)) <= 8L)
     opts <- colnames(this_dat)[cols_lt8]
     if(length(cols_lt8) == 0L) opts <- "<no suitable variable found>"
       
@@ -156,7 +156,7 @@ server <- function(input, output, session){
     est_dim <- min(which(cum_var > 90L))
   })
   alpha <- reactive({min(c(1L, 5L / sqrt(nrow(raw_dat()))))})
-  pca_msg <- reactive({
+  output$pca_msg <- renderText({
     rv$curr_dim
     p <- p()
     cum_var <- df_scree_pca(pca_obj())$cumsum_var[rv$curr_dim]
@@ -165,7 +165,6 @@ server <- function(input, output, session){
            " principle components capture ",
            round(cum_var, 2L), "% of the variance in the processed data.")
   })
-  #output$pca_msg <- renderText(pca_msg())
   output$pca_header <- renderText({
     paste0(rv$curr_dim, " of ", p()," principal components")
   })
@@ -183,8 +182,6 @@ server <- function(input, output, session){
                             values_to = "value")
       df_long$variable <- factor(df_long$variable, levels = colnames(df))
       
-      egar_eval_pls <- est_pca90()
-      
       ggplot() +
         geom_density(aes(value), df_long) +
         geom_rug(aes(value), df_long,
@@ -192,7 +189,8 @@ server <- function(input, output, session){
         facet_wrap(vars(variable)) +
         theme_minimal() +
         theme(axis.text.y = element_blank())
-    }, cacheKeyExpr = { list(proc_dat(), alpha()) }
+    }, 
+    cacheKeyExpr = {list(proc_dat(), alpha())}
   )
   
   ### PCA screeplot ----
@@ -204,9 +202,7 @@ server <- function(input, output, session){
       ggproto_screeplot_pca(pca_obj),
       theme_minimal(),
       theme(legend.position = "bottom",
-            legend.direction = "horizontal"),
-      labs(title = "PCA Screeplot",
-           subtitle = pca_msg())
+            legend.direction = "horizontal")
     )
   })
   ggproto_bkg_shade_scree <- reactive({
@@ -244,7 +240,7 @@ server <- function(input, output, session){
     truthy_dat <- truthy_dat()
     ret <- list() ## Initialize
     if(aes_var_nm %in% colnames(truthy_dat)){
-      aes_vect <- as.factor(truthy_dat[aes_var_nm][, 1])
+      aes_vect <- as.factor(truthy_dat[aes_var_nm][, 1L])
       rowname <- type.convert(rownames(truthy_dat))
       ret <- list(color = aes_vect, shape = aes_vect, rowname = rowname)
     }
@@ -295,17 +291,17 @@ server <- function(input, output, session){
       #correlation = Rdimtools::est.correlation(proc_dat)$estdim, # correlation dimension
       ## Error in lm.fit(x, y, offset = offset, singular.ok = singular.ok, ...) : 
       ####  NA/NaN/Inf in 'y'
-      made = Rdimtools::est.made(proc_dat)$estdim, # manifold-adaptive dimension estimation
-      mle2 = Rdimtools::est.mle2(proc_dat)$estdim, # MLE with Poisson process
-      twonn = Rdimtools::est.twonn(proc_dat)$estdim, # minimal neighborhood information
-      Ustat = Rdimtools::est.Ustat(proc_dat)$estdim # convergence rate of U-statistic on manifold
+      made = Rdimtools::est.made(proc_dat)$estdim, ## manifold-adaptive dimension estimation
+      mle2 = Rdimtools::est.mle2(proc_dat)$estdim, ## MLE with Poisson process
+      twonn = Rdimtools::est.twonn(proc_dat)$estdim ## minimal neighborhood information
+      #Ustat = Rdimtools::est.Ustat(proc_dat)$estdim ## ~ 5x slower## convergence rate of U-statistic on manifold
     )
     rownames(df) <- "est_idd"
     return(df)
   })
   output$idd_tbl <- renderTable(idd_tbl())
   est_idd <- reactive({
-    vec <- as.data.frame(t(as.matrix(idd_tbl())))[, 1]
+    vec <- as.data.frame(t(as.matrix(idd_tbl())))[, 1L]
     ret <- rv$curr_dim <- ceiling(mean(vec, na.rm = TRUE))
     return(ret)
   })
@@ -419,6 +415,7 @@ server <- function(input, output, session){
         sep = " \n"
     )
   })
-}
+} ### close function, assigning server.
 
 shinyApp(ui = ui, server = server)
+
