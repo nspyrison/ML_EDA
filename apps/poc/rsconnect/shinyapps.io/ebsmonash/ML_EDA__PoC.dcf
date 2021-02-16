@@ -1,0 +1,12 @@
+name: ML_EDA__PoC
+title: ML_EDA__PoC
+username:
+account: ebsmonash
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3643083
+bundleId: 4228145
+url: https://ebsmonash.shinyapps.io/ML_EDA__PoC/
+when: 1613446933.38659
+asMultiple: FALSE
+asStatic: FALSE
