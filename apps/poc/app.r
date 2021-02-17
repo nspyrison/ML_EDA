@@ -15,6 +15,8 @@ source("ggproto_screeplot_pca.r", local = TRUE)
 server <- function(input, output, session){
   rv <- reactiveValues()
   rv$curr_dim <- NA_integer_
+  observeEvent({input$remove_dim}, {rv$curr_dim <- rv$curr_dim - 1L})
+  observeEvent({input$add_dim},    {rv$curr_dim <- rv$curr_dim + 1L})
   
   ### raw_dat, data.frame
   raw_dat <- reactive({
@@ -132,10 +134,7 @@ server <- function(input, output, session){
   })
   alpha <- reactive({min(c(1L, 5L / sqrt(nrow(raw_dat()))))})
   output$pca_msg <- renderText({
-    rv$curr_dim
-    p <- p()
     cum_var <- df_scree_pca(pca_obj())$cumsum_var[rv$curr_dim]
-    
     paste0("The first ", rv$curr_dim, #" (", round(100L * rv$curr_dim / p, 1L), "% of data space)",
            " principle components capture ",
            round(cum_var, 2L), "% of the variance in the processed data.")
@@ -271,7 +270,7 @@ server <- function(input, output, session){
     return(ret)
   })
   output$est_idd_msg <- renderText({
-    paste0("Ceiling of mean estimated iid; initialize to the first ", est_idd(), " PC.")
+    paste0("Ceiling of mean of estimated idd; initialize to the first ", est_idd(), " PC.")
   })
   
   ### tsne plot -----

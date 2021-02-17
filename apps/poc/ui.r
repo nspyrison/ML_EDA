@@ -56,9 +56,9 @@ tab2_eda <- tabPanel("Explore", fluidPage(
     ## Left column, screeplot, buttons
     column(width = 6L,
            plotOutput("pc_screeplot") %>% withSpinner(type = 8L),
-           column(width = 3L, actionButton("sw_less", "< Remove a variable")),
+           column(width = 3L, actionButton("remove_dim", "< Remove a variable")),
            column(width = 6L, h3(textOutput("pca_header"), align = "center")),
-           column(width = 3L, actionButton("sw_more", "Add a variable >")),
+           column(width = 3L, actionButton("add_dim", "Add a variable >")),
     ),
     ## Right column, tours
     column(width = 6L,
@@ -77,7 +77,7 @@ tab2_eda <- tabPanel("Explore", fluidPage(
   fluidRow(
     ## Left column, pc_density_plot
     column(width = 6L,
-           h3("Estimating iid"),
+           h3("Estimating intrinsic data dimensionality (idd)"),
            tableOutput("idd_tbl") %>%
              shinycssloaders::withSpinner(type = 8L),
            column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
