@@ -249,7 +249,7 @@ server <- function(input, output, session){
     proc_dat <- proc_dat()
     df <- data.frame(
       check.names = FALSE,
-      `pca@90%` = est_pca80(),
+      `pca@80%` = est_pca80(),
       `%IncMSE@90%` = NA,
       `IncNodePurity@90%` = NA,
       #correlation = Rdimtools::est.correlation(proc_dat)$estdim, # correlation dimension
@@ -266,7 +266,7 @@ server <- function(input, output, session){
   output$idd_tbl <- renderTable(idd_tbl())
   est_idd <- reactive({
     vec <- as.data.frame(t(as.matrix(idd_tbl())))[, 1L]
-    ret <- rv$curr_dim <- ceiling(mean(vec, na.rm = TRUE))
+    ret <- rv$curr_dim <- rv$anchor_dim <-ceiling(mean(vec, na.rm = TRUE))
     return(ret)
   })
   output$est_idd_msg <- renderText({

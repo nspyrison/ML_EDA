@@ -19,6 +19,16 @@ require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 mlb_dat <- data(package = "mlbench")$results[, 3L]
 palette(RColorBrewer::brewer.pal(8L, "Dark2"))
 
+## for a more stuctured sidePanel: 
+## folowing https://stackoverflow.com/questions/52544228/r-shiny-display-static-text-outside-sidebar-panel
+sidebarPanel2 <- function (..., after_well = NULL,  width = 4L) 
+{
+  div(class = paste0("col-sm-", width), 
+      tags$form(class = "well", ...),
+      after_well
+  )
+}
+
 ##### tab1_input -----
 ### Input data, default to flea
 tab1_input <- tabPanel("Input", fluidPage(
@@ -48,49 +58,50 @@ tab1_input <- tabPanel("Input", fluidPage(
     ) ## close mainPanel
 )) ## Assign tab1_input
 
-##### tab2_eda ----
-### Explore PC-space
-tab2_eda <- tabPanel("Explore", fluidPage(
-  ### Row 1, PC screeplot, tour
-  fluidRow(
-    ## Left column, screeplot, buttons
-    column(width = 6L,
-           plotOutput("pc_screeplot") %>% withSpinner(type = 8L),
-           column(width = 3L, actionButton("remove_dim", "< Remove a variable")),
-           column(width = 6L, h3(textOutput("pca_header"), align = "center")),
-           column(width = 3L, actionButton("add_dim", "Add a variable >")),
-    ),
-    ## Right column, tours
-    column(width = 6L,
-           h3("Linear embedding"),
-           p("A tour -- animations of linear embeddings (orthonormally constrained)"),
-           plotly::plotlyOutput("tour_plotly") %>% shinycssloaders::withSpinner(type = 8L),
-           radioButtons("tour_mode", "Tour mode",
-                        choices = c("stepwise (WIP)",
-                                    "local",
-                                    "grand"),
-                        selected = "grand",
-                        inline = TRUE)
-    ),
-  ), ## End of Row 1, PC screeplot, tour
-  ### Row 2, Estimating idd (left), tSNE (right)
-  fluidRow(
-    ## Left column, pc_density_plot
-    column(width = 6L,
-           h3("Estimating intrinsic data dimensionality (idd)"),
-           tableOutput("idd_tbl") %>%
-             shinycssloaders::withSpinner(type = 8L),
-           column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
-    ),
-    ## Right column, tSNE
-    column(width = 6L,
-           h3("Non-linear embedding"),
-           p("tSNE, non-linear embedding -- distances not Euclidean; be carful with interpretive claims"),
-           plotly::plotlyOutput("tsne_plotly") %>%
-             shinycssloaders::withSpinner(type = 8L)
-    ),
-  ) ## End Row 2, Estimating idd
-)) ## Assign tab2_eda
+##### tab2_explore ----
+tab2_explore <- tabPanel("Explore", sidebarLayout(
+  fluid = FALSE,
+  ## sidebarPanel: Est idd, PC screeplot
+  sidebarPanel2(width = 4L,
+                ## estimate idd
+                h3("Estimating intrinsic data dimensionality (idd)"),
+                tableOutput("idd_tbl") %>%
+                  shinycssloaders::withSpinner(type = 8L),
+                fluidRow(
+                  column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
+                ),
+                after_well = list(
+                  ## PCA screeplot
+                  plotOutput("pc_screeplot") %>% withSpinner(type = 8L),
+                  fluidRow(
+                    column(width = 6L, actionButton("remove_dim", "< Remove a variable")),
+                    column(width = 6L, actionButton("add_dim", "Add a variable >")),
+                  ),
+                  fluidRow(
+                    column(width = 12L, h3(textOutput("pca_header"), align = "center"))
+                  )
+                )
+  ),
+  ## mainPanel: Tourr, tSNE
+  mainPanel(width = 8L,
+            ## Tour
+            h3("Linear embedding"),
+            p("A tour -- animations of linear embeddings (orthonormally constrained)"),
+            plotly::plotlyOutput("tour_plotly") %>% shinycssloaders::withSpinner(type = 8L),
+            radioButtons("tour_mode", "Tour mode",
+                         choices = c("local",
+                                     "grand",
+                                     "stepwise (WIP)",
+                                     "guided? (WIP)"),
+                         selected = "local",
+                         inline = TRUE),
+            ## tSNE
+            h3("Non-linear embedding"),
+            p("tSNE, non-linear embedding -- distances not Euclidean; be carful with interpretive claims"),
+            plotly::plotlyOutput("tsne_plotly") %>%
+              shinycssloaders::withSpinner(type = 8L)
+  )
+)) ## Assign tab2_explore
 
 ##### tab3_output -----
 tab3_output <- tabPanel("Output (WIP)", fluidPage(
@@ -119,7 +130,7 @@ ui <- fluidPage(theme = shinythemes::shinytheme("flatly"),
                 ## Content:
                 navbarPage("Machine learning exploratory data analysis, Proof of Concept",
                            tab1_input,
-                           tab2_eda,
+                           tab2_explore,
                            tab3_output,
                            tab4_about)
 )
