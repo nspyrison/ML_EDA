@@ -1,7 +1,7 @@
 ### ML_EDA/apps/poc/ui.r -----
 
 #' @author Nicholas Spyrison
-#' Feb .2021
+#' Feb. 2021
 
 require("spinifex")
 require("tourr")
@@ -18,16 +18,6 @@ require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 ## Initialize
 mlb_dat <- data(package = "mlbench")$results[, 3L]
 palette(RColorBrewer::brewer.pal(8L, "Dark2"))
-
-## for a more stuctured sidePanel: 
-## folowing https://stackoverflow.com/questions/52544228/r-shiny-display-static-text-outside-sidebar-panel
-sidebarPanel2 <- function (..., after_well = NULL,  width = 4L) 
-{
-  div(class = paste0("col-sm-", width), 
-      tags$form(class = "well", ...),
-      after_well
-  )
-}
 
 ##### tab1_input -----
 ### Input data, default to flea
@@ -54,7 +44,7 @@ tab1_input <- tabPanel("Input", fluidPage(
     mainPanel(h3("Input data"),
               verbatimTextOutput("raw_dat_str"),
               h3("Processed data univariate densities"),
-              plotOutput("proc_dat_density")
+              plotOutput("proc_dat_density", width = "1100px", height = "682px")
     ) ## close mainPanel
 )) ## Assign tab1_input
 
@@ -62,28 +52,29 @@ tab1_input <- tabPanel("Input", fluidPage(
 tab2_explore <- tabPanel("Explore", sidebarLayout(
   fluid = FALSE,
   ## sidebarPanel: Est idd, PC screeplot
-  sidebarPanel2(width = 4L,
-                ## estimate idd
-                h3("Estimating intrinsic data dimensionality (idd)"),
-                tableOutput("idd_tbl") %>%
-                  shinycssloaders::withSpinner(type = 8L),
-                fluidRow(
-                  column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
-                ),
-                fluidRow(
-                  column(width = 6L, actionButton("remove_dim", "< Remove a variable", align = "center")),
-                  column(width = 6L, actionButton("add_dim", "Add a variable >", align = "center")),
-                ),
-                column(width = 12L, h3(textOutput("pca_header"), align = "center")),
-                ## PCA screeplot
-                plotOutput("pc_screeplot") %>% withSpinner(type = 8L)
+  sidebarPanel(width = 4L,
+               ## estimate idd
+               h3("Estimating intrinsic data dimensionality (idd)"),
+               tableOutput("idd_tbl") %>%
+                 shinycssloaders::withSpinner(type = 8L),
+               fluidRow(
+                 column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
+               ),
+               fluidRow(
+                 column(width = 6L, align = "center", actionButton("remove_dim", "< Remove a variable")),
+                 column(width = 6L, align = "center", actionButton("add_dim", "Add a variable >")),
+               ),
+               column(width = 12L, h3(textOutput("pca_header"), align = "center")),
+               ## PCA screeplot
+               plotOutput("pc_screeplot") %>% withSpinner(type = 8L)
   ),
   ## mainPanel: Tourr, tSNE
   mainPanel(width = 8L,
             ## Tour
             h3("Linear embedding"),
             p("A tour -- animations of linear embeddings (orthonormally constrained)"),
-            plotly::plotlyOutput("tour_plotly") %>% shinycssloaders::withSpinner(type = 8L),
+            plotly::plotlyOutput("tour_plotly", width = "1100px", height = "682px") %>%
+              shinycssloaders::withSpinner(type = 8L),
             radioButtons("tour_mode", "Tour mode",
                          choices = c("local",
                                      "grand",
@@ -95,7 +86,7 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
             h3("Non-linear embedding"),
             p("tSNE, non-linear embedding -- distances not Euclidean; be careful with interpretive claims"),
             textOutput("tsne_msg"),
-            plotly::plotlyOutput("tsne_plotly") %>%
+            plotly::plotlyOutput("tsne_plotly", width = "1100px", height = "682px") %>%
               shinycssloaders::withSpinner(type = 8L)
   )
 )) ## Assign tab2_explore

@@ -7,7 +7,7 @@
 #' Output options will include processed data, PC-space, ensemble graphics
 #' 
 #' @author Nicholas Spyrison
-#' Feb .2021
+#' Feb. 2021
 
 source("ui.r", local = TRUE)
 source("ggproto_screeplot_pca.r", local = TRUE)
@@ -144,7 +144,7 @@ server <- function(input, output, session){
   })
   
   
-  ### Proc dat density -----
+  ### proc_dat_density -----
   output$proc_dat_density <- renderCachedPlot(
     {
       req(proc_dat())
@@ -164,10 +164,11 @@ server <- function(input, output, session){
         theme_minimal() +
         theme(axis.text.y = element_blank())
     }, 
-    cacheKeyExpr = {list(proc_dat(), alpha())}
+    cacheKeyExpr = {list(proc_dat(), alpha())},
+    sizePolicy = sizeGrowthRatio(width = 1100L, height = 682L)
   )
   
-  ### PCA screeplot ----
+  ### pc_screeplot ----
   ggproto_scree <- reactive({
     req(pca_obj())
     pca_obj <- pca_obj()
@@ -197,10 +198,10 @@ server <- function(input, output, session){
     ggplot() +
       ggproto_bkg_shade_scree() +
       ggproto_scree()
-  }, height = 341L, width = 550L)
+  }, width = 550L, height = 341L)
   outputOptions(output, "pc_screeplot", suspendWhenHidden = FALSE) ## Eager evaluation
   
-  ### Tour plotly -----
+  ### tour_plotly -----
   spinifex_aes_args <- reactive({
     aes_var_nm <- input$aes_var_nm
     truthy_dat <- truthy_dat()
@@ -239,14 +240,19 @@ server <- function(input, output, session){
                                     tooltip = "rowname",
                                     aes_args = spinifex_aes_args(),
                                     identity_args = list(alpha = alpha())
-    ) %>% plotly::config(displayModeBar = FALSE)
+    ) %>%
+      plotly::layout(showlegend = FALSE,
+                     yaxis = list(showgrid = FALSE, showline = FALSE, fixedrange = TRUE),
+                     xaxis = list(showgrid = FALSE, showline = FALSE, fixedrange = TRUE)
+      ) %>%
+      plotly::config(displayModeBar = FALSE)
     
     return(ggp)
   })
-  outputOptions(output, "tour_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
+  ##outputOptions(output, "tour_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
   
   
-  ### Est idd -----
+  ### idd_tbl -----
   idd_tbl <- reactive({
     req(est_pca80())
     proc_dat <- proc_dat()
@@ -279,7 +285,7 @@ server <- function(input, output, session){
   })
   outputOptions(output, "est_idd_msg", suspendWhenHidden = FALSE) ## Eager evaluation
   
-  ### tsne plot -----
+  ### tsne_plotly -----
   output$tsne_plotly <- plotly::renderPlotly({
     req(est_idd())
     df_proj <- as.matrix(pca_obj()$x[, 1L:rv$curr_dim])
@@ -343,12 +349,13 @@ server <- function(input, output, session){
     
     ggp <- plotly::ggplotly(gg, tooltip = "rowname") %>%
       plotly::layout(showlegend = FALSE,
-                     yaxis = list(showgrid = FALSE, showline = FALSE),
-                     xaxis = list(showgrid = FALSE, showline = FALSE)) %>%
+                     yaxis = list(showgrid = FALSE, showline = FALSE, fixedrange = TRUE),
+                     xaxis = list(showgrid = FALSE, showline = FALSE, fixedrange = TRUE)
+      ) %>%
       plotly::config(displayModeBar = FALSE)
     return(ggp)
   })
-  outputOptions(output, "tsne_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
+  ##outputOptions(output, "tsne_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
   
 } ### close function, assigning server.
 
