@@ -70,17 +70,13 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
                 fluidRow(
                   column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
                 ),
-                after_well = list(
-                  ## PCA screeplot
-                  plotOutput("pc_screeplot") %>% withSpinner(type = 8L),
-                  fluidRow(
-                    column(width = 6L, actionButton("remove_dim", "< Remove a variable")),
-                    column(width = 6L, actionButton("add_dim", "Add a variable >")),
-                  ),
-                  fluidRow(
-                    column(width = 12L, h3(textOutput("pca_header"), align = "center"))
-                  )
-                )
+                fluidRow(
+                  column(width = 6L, actionButton("remove_dim", "< Remove a variable", align = "center")),
+                  column(width = 6L, actionButton("add_dim", "Add a variable >", align = "center")),
+                ),
+                column(width = 12L, h3(textOutput("pca_header"), align = "center")),
+                ## PCA screeplot
+                plotOutput("pc_screeplot") %>% withSpinner(type = 8L)
   ),
   ## mainPanel: Tourr, tSNE
   mainPanel(width = 8L,
@@ -97,7 +93,8 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
                          inline = TRUE),
             ## tSNE
             h3("Non-linear embedding"),
-            p("tSNE, non-linear embedding -- distances not Euclidean; be carful with interpretive claims"),
+            p("tSNE, non-linear embedding -- distances not Euclidean; be careful with interpretive claims"),
+            textOutput("tsne_msg"),
             plotly::plotlyOutput("tsne_plotly") %>%
               shinycssloaders::withSpinner(type = 8L)
   )

@@ -194,10 +194,11 @@ server <- function(input, output, session){
     )
   })
   output$pc_screeplot <- renderPlot({
-    ggplot() + 
+    ggplot() +
       ggproto_bkg_shade_scree() +
       ggproto_scree()
-  })
+  }, height = 341L, width = 550L)
+  outputOptions(output, "pc_screeplot", suspendWhenHidden = FALSE) ## Eager evaluation
   
   ### Tour plotly -----
   spinifex_aes_args <- reactive({
@@ -242,6 +243,8 @@ server <- function(input, output, session){
     
     return(ggp)
   })
+  outputOptions(output, "tour_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
+  
   
   ### Est idd -----
   idd_tbl <- reactive({
@@ -250,8 +253,8 @@ server <- function(input, output, session){
     df <- data.frame(
       check.names = FALSE,
       `pca@80%` = est_pca80(),
-      `%IncMSE@90%` = NA,
-      `IncNodePurity@90%` = NA,
+      # `%IncMSE@90%` = NA,
+      # `IncNodePurity@90%` = NA,
       #correlation = Rdimtools::est.correlation(proc_dat)$estdim, # correlation dimension
       ## Error in lm.fit(x, y, offset = offset, singular.ok = singular.ok, ...) : 
       ####  NA/NaN/Inf in 'y'
@@ -264,28 +267,43 @@ server <- function(input, output, session){
     return(df)
   })
   output$idd_tbl <- renderTable(idd_tbl())
+  outputOptions(output, "idd_tbl", suspendWhenHidden = FALSE) ## Eager evaluation
+  
   est_idd <- reactive({
     vec <- as.data.frame(t(as.matrix(idd_tbl())))[, 1L]
     ret <- rv$curr_dim <- rv$anchor_dim <-ceiling(mean(vec, na.rm = TRUE))
     return(ret)
   })
   output$est_idd_msg <- renderText({
-    paste0("Ceiling of mean of estimated idd; initialize to the first ", est_idd(), " PC.")
+    paste0("Initialize to the first ", est_idd(), " PC.") ## Really the ceiling of the mean of the estimates.
   })
+  outputOptions(output, "est_idd_msg", suspendWhenHidden = FALSE) ## Eager evaluation
   
   ### tsne plot -----
   output$tsne_plotly <- plotly::renderPlotly({
     req(est_idd())
     df_proj <- as.matrix(pca_obj()$x[, 1L:rv$curr_dim])
-    .preplex <- (nrow(df_proj) - 1L) / 3L
+    truthy_dat <- truthy_dat()
+    deduped <- unique(df_proj)
+    dup_msg <- ""
+    if(nrow(deduped) < nrow(df_proj)){
+      dup_msg <- "Had to remove duplicated before tSNE. \n"
+    }
+    
+    .preplex <- round(sqrt(nrow(deduped) - 1L) / 3L, 1L)
     .iter <- 500L
     .theta <- .75
-    tnsne_obj <- Rtsne::Rtsne(df_proj, dims = 2L, pca = FALSE,
+    output$tsne_msg <-
+      paste0(dup_msg, 
+             "hyperparameters: PC_dims = ", rv$curr_dim, ", perplexity = ", .preplex,
+             ", theta(learning) = ", .theta, " , max_iterations = ", .iter) %>% 
+      renderText()
+    
+    tnsne_obj <- Rtsne::Rtsne(deduped, dims = 2L, pca = FALSE,
                               perplexity = .preplex,
                               max_iter = .iter,
                               theta = .theta
                               )
-    truthy_dat <- truthy_dat()
     tnsne_proj <- data.frame(
       tsne1 = tnsne_obj$Y[, 1L], 
       tsne2 = tnsne_obj$Y[, 2L],
@@ -318,9 +336,9 @@ server <- function(input, output, session){
       annotate("text", x = .txt_x, y = .txt_y, color = "grey50",
                label = paste0("tSNE with hyperparameters \n",
                               "pc_dims = ", rv$curr_dim, " \n",
-                              "perplexity = ", round(.preplex, 2L), " \n",
-                              "iterations = ", .iter, " \n",
-                              "theta (learning) = ", .theta)
+                              "perplexity = ", .preplex, " \n",
+                              "theta (learning) = ", .theta, " \n",
+                              "max_iterations = ", .iter)
       )
     
     ggp <- plotly::ggplotly(gg, tooltip = "rowname") %>%
@@ -330,6 +348,8 @@ server <- function(input, output, session){
       plotly::config(displayModeBar = FALSE)
     return(ggp)
   })
+  outputOptions(output, "tsne_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
+  
 } ### close function, assigning server.
 
 shinyApp(ui = ui, server = server)
