@@ -108,8 +108,8 @@ tab4_about <- tabPanel("About (WIP)", fluidPage(
   p("-Context and scope"),
   p("-ML pyramid/ DS pipeline"),
   p("Sources/references"),
-  img(src = "ML_EDA.PNG", align = "left"),
-  p('(top) Wickham, H., & Grolemund, G. (2016). R for data science. ', a(href = 'https://r4ds.had.co.nz/', 'https://r4ds.had.co.nz/', .noWS = "outside"), '!', .noWS = c("after-begin", "before-end")),
+  img(src = "ML_EDA.PNG"),
+  p('(top) Wickham, H., & Grolemund, G. (2016). R for data science. ', a(href = 'https://r4ds.had.co.nz/', 'https://r4ds.had.co.nz/', .noWS = "outside"), '!', .noWS = c("after-begin", "before-end")),
   p('(bottom) Biecek P. & Burzykowski T. (2020). Explanatory Model Analysis. ', a(href = 'http://ema.drwhy.ai/', 'http://ema.drwhy.ai/', .noWS = "outside"), '!', .noWS = c("after-begin", "before-end")) 
 )) ## Assign tab4_about
 

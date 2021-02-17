@@ -9,8 +9,8 @@
 #' @author Nicholas Spyrison
 #' Feb. 2021
 
-source("ui.r", local = TRUE)
-source("ggproto_screeplot_pca.r", local = TRUE)
+source("ui.r", local = TRUE, encoding = "utf-8")
+source("ggproto_screeplot_pca.r", local = TRUE, encoding = "utf-8")
 
 server <- function(input, output, session){
   rv <- reactiveValues()
