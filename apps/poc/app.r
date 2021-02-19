@@ -221,13 +221,13 @@ server <- function(input, output, session){
     dat <- pca_obj$x[, 1L:rv$curr_dim]
     
     tour_nm <- input$tour_mode
-    if(tour_nm == "grand"){tour_func <- tourr::grand_tour()}
-    if(tour_nm == "local"){tour_func <- tourr::local_tour(start = bas)}
+    if(tour_nm == "grand"){t_path <- tourr::grand_tour()}
+    if(tour_nm == "local"){t_path <- tourr::local_tour(start = bas)}
     
     invisible(utils::capture.output( ## Mute the noisy function
       t_hist <- save_history(
         data <- dat,
-        tour_path = tour_func,
+        tour_path = t_path,
         max_bases = 10L
       )
     ))
