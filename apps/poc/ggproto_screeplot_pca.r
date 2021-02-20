@@ -54,3 +54,41 @@ ggproto_screeplot_pca <- function(pca_obj){
   )
 }
 
+#' Creates a data frame of the variance explained by the Principal Components.
+#' 
+#' @examples 
+#' dat <- as.matrix(tourr::flea[, 1:6])
+#' pca_obj <- prcomp(dat)
+#' est.idd_pca(pca_obj)
+est.idd_pca <- function(pca_obj, var_cutoff = .9){
+  cum_var <- df_scree_pca(pca_obj)$cumsum_var
+  as.integer(
+    min(
+      which(cum_var > 100L * var_cutoff)
+    )
+  )
+}
+
+#' @example 
+#' dat <- as.matrix(tourr::flea[, 1:6])
+#' est_idd_vec(data = dat, inc_slow = FALSE)
+#' est_idd_vec(data = dat, inc_slow = TRUE)
+est_idd_vec <- function(data, inc_slow = FALSE){
+  idd_pca <- est.idd_pca(prcomp(data), .9)
+  ls_funcs <- list(Rdimtools::est.boxcount, Rdimtools::est.correlation,
+                   Rdimtools::est.made, Rdimtools::est.mle2,
+                   Rdimtools::est.twonn)
+  nms <- c("est.boxcount", "est.correlation", "est.made", "est.mle2", "est.twonn")
+  if(inc_slow == TRUE){
+    ls_funcs <- c(
+      ls_funcs, list(Rdimtools::est.clustering, Rdimtools::est.danco,
+                     Rdimtools::est.gdistnn, Rdimtools::est.incisingball,
+                     Rdimtools::est.mindkl, Rdimtools::est.Ustat
+      ))
+    nms <- c(nms, "est.clustering", "est.danco", "est.gdistnn", "est.incisingball", "est.mindkl", "est.Ustat")
+  } ## est.incisingball prints histogram...
+  ret <- sapply(1:length(ls_funcs), function(i){ls_funcs[[i]](data)$estdim})
+  ret <- c(idd_pca, ret)
+  names(ret) <- c("pca@90%", nms)
+  return(ret)
+}

@@ -129,8 +129,7 @@ server <- function(input, output, session){
     prcomp(proc_dat())
   })
   est_pca80 <- reactive({
-    cum_var <- df_scree_pca(pca_obj())$cumsum_var
-    min(which(cum_var > 80L)) %>% as.integer()
+    est.idd_pca(pca_obj(), var_cutoff = .8)
   })
   alpha <- reactive({min(c(1L, 5L / sqrt(nrow(raw_dat()))))})
   output$pca_msg <- renderText({
