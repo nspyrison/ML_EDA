@@ -87,7 +87,14 @@ est_idd_vec <- function(data, inc_slow = FALSE){
       ))
     nms <- c(nms, "est.clustering", "est.danco", "est.gdistnn", "est.incisingball", "est.mindkl", "est.Ustat")
   } ## est.incisingball prints histogram...
-  ret <- sapply(1:length(ls_funcs), function(i){ls_funcs[[i]](data)$estdim})
+  ret <- sapply(1:length(ls_funcs), function(i){
+    tryCatch(ls_funcs[[i]](data)$estdim,
+             error=function(cond){
+               message("Error in est.* function:")
+               message(cond)
+               return(NA)
+             })
+  })
   ret <- c(idd_pca, ret)
   names(ret) <- c("pca@90%", nms)
   return(ret)
