@@ -71,10 +71,10 @@ est.pca <- function(pca_obj, var_cutoff = .9){
 
 #' @example 
 #' dat <- as.matrix(tourr::flea[, 1:6])
-#' est_idd_vec(data = dat, inc_slow = FALSE)
-#' est_idd_vec(data = dat, inc_slow = TRUE)
-est_idd_vec <- function(data, inc_slow = FALSE){
-  idd_pca <- est.idd_pca(prcomp(data), .9)
+#' ide_vec(data = dat, inc_slow = FALSE)
+#' ide_vec(data = dat, inc_slow = TRUE)
+ide_vect <- function(data, inc_slow = FALSE){
+  idd_pca <- est.pca(prcomp(data), .9)
   ls_funcs <- list(Rdimtools::est.boxcount, Rdimtools::est.correlation,
                    Rdimtools::est.made, Rdimtools::est.mle2,
                    Rdimtools::est.twonn)

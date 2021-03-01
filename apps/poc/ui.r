@@ -58,7 +58,7 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
                tableOutput("ide_tbl") %>%
                  shinycssloaders::withSpinner(type = 8L),
                fluidRow(
-                 column(width = 12L, h3(textOutput("est_ide_msg"), align = "center"))
+                 column(width = 12L, h3(textOutput("ide_msg"), align = "center"))
                ),
                fluidRow(
                  column(width = 6L, align = "center", actionButton("remove_dim", "< Remove a variable")),

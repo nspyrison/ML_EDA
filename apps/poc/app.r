@@ -146,6 +146,8 @@ server <- function(input, output, session){
   ### proc_dat_density -----
   output$proc_dat_density <- renderCachedPlot(
     {
+      
+      try <- var2pc_imp() ### TODO REMOVE ME LATER
       req(proc_dat())
       df <- as.data.frame(proc_dat())
       df_long <-
@@ -200,7 +202,35 @@ server <- function(input, output, session){
   }, width = 550L, height = 341L)
   outputOptions(output, "pc_screeplot", suspendWhenHidden = FALSE) ## Eager evaluation
   
+  ### var2pc_imp ----
+  var2pc_imp <- reactive({
+    ide() ## Force curr_basis to resolve??
+    req(curr_basis())
+    pca_obj <- pca_obj()
+    pca_obj$rotation ## SOLVE FOR component in 1:rv$curr_dim and rv_curr_dim+1:end.
+    bas_in <- tpca_obj$rotation[,1L:]
+    browser()
+    bas <- curr_basis()
+
+  })
+  
+  
   ### tour_plotly -----
+  anchor_basis <- reactive({
+    req(ide())
+    pca_obj <- pca_obj()
+    bas <- t(pca_obj$rotation[, 1L:ide()])[, 1L:2L]
+    colnames(bas) <- paste0("y", 1L:2L)
+    bas
+  })
+  curr_basis <- reactive({
+    req(rv$curr_dim)
+    pca_obj <- pca_obj()
+    bas <- t(pca_obj$rotation[, 1L:rv$curr_dim])[, 1L:2L]
+    colnames(bas) <- paste0("y", 1L:2L)
+    bas
+  })
+    
   spinifex_aes_args <- reactive({
     aes_var_nm <- input$aes_var_nm
     truthy_dat <- truthy_dat()
@@ -213,10 +243,9 @@ server <- function(input, output, session){
     return(ret)
   })
   output$tour_plotly <- plotly::renderPlotly({
-    req(rv$curr_dim)
+    req(curr_basis())
+    bas <- curr_basis()
     pca_obj <- pca_obj()
-    bas <- t(pca_obj$rotation[, 1L:rv$curr_dim])[, 1L:2L]
-    names(bas) <- paste("y", 1L:2L)
     dat <- pca_obj$x[, 1L:rv$curr_dim]
     
     tour_nm <- input$tour_mode
@@ -251,8 +280,8 @@ server <- function(input, output, session){
   ##outputOptions(output, "tour_plotly", suspendWhenHidden = FALSE) ## Eager evaluation
   
   
-  ### idd_tbl -----
-  idd_tbl <- reactive({
+  ### ide_tbl -----
+  ide_tbl <- reactive({
     req(est_pca80())
     proc_dat <- proc_dat()
     df <- data.frame(
@@ -268,40 +297,41 @@ server <- function(input, output, session){
       twonn = Rdimtools::est.twonn(proc_dat)$estdim ## minimal neighborhood information
       #Ustat = Rdimtools::est.Ustat(proc_dat)$estdim ## ~ 5x slower## convergence rate of U-statistic on manifold
     )
-    rownames(df) <- "est_idd"
+    rownames(df) <- "estdim"
     return(df)
   })
-  output$idd_tbl <- renderTable(idd_tbl())
-  outputOptions(output, "idd_tbl", suspendWhenHidden = FALSE) ## Eager evaluation
+  output$ide_tbl <- renderTable(ide_tbl())
+  outputOptions(output, "ide_tbl", suspendWhenHidden = FALSE) ## Eager evaluation
   
-  est_idd <- reactive({
-    vec <- as.data.frame(t(as.matrix(idd_tbl())))[, 1L]
-    ret <- rv$curr_dim <- rv$anchor_dim <-ceiling(mean(vec, na.rm = TRUE))
+  ide <- reactive({
+    req(ide_tbl())
+    vec <- as.data.frame(t(as.matrix(ide_tbl())))[, 1L]
+    ret <- rv$curr_dim <- rv$anchor_dim <- ceiling(mean(vec, na.rm = TRUE))
     return(ret)
   })
   output$ide_msg <- renderText({
-    paste0("Initialize to the first ", est_idd(), " PC.") ## Really the ceiling of the mean of the estimates.
+    paste0("Initialize to the first ", ide(), " PC.") ## Really the ceiling of the mean of the estimates.
   })
   outputOptions(output, "ide_msg", suspendWhenHidden = FALSE) ## Eager evaluation
   
   ### tsne_plotly -----
   output$tsne_plotly <- plotly::renderPlotly({
-    req(est_idd())
+    req(rv$curr_dim)
     df_proj <- as.matrix(pca_obj()$x[, 1L:rv$curr_dim])
     truthy_dat <- truthy_dat()
     deduped <- unique(df_proj)
     dup_msg <- ""
     if(nrow(deduped) < nrow(df_proj)){
-      dup_msg <- "Had to remove duplicated before tSNE. \n"
+      dup_msg <- "Had to  duplicated before tSNE. \n"
     }
     
     .preplex <- round(sqrt(nrow(deduped) - 1L) / 3L, 1L)
     .iter <- 500L
     .theta <- .75
     output$tsne_msg <-
-      paste0(dup_msg, 
+      paste0(dup_msg,
              "hyperparameters: PC_dims = ", rv$curr_dim, ", perplexity = ", .preplex,
-             ", theta(learning) = ", .theta, " , max_iterations = ", .iter) %>% 
+             ", theta(learning) = ", .theta, " , max_iterations = ", .iter) %>%
       renderText()
     
     tnsne_obj <- Rtsne::Rtsne(deduped, dims = 2L, pca = FALSE,
@@ -310,7 +340,7 @@ server <- function(input, output, session){
                               theta = .theta
                               )
     tnsne_proj <- data.frame(
-      tsne1 = tnsne_obj$Y[, 1L], 
+      tsne1 = tnsne_obj$Y[, 1L],
       tsne2 = tnsne_obj$Y[, 2L],
       rowname = type.convert(rownames(truthy_dat))
     )
