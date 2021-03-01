@@ -51,14 +51,14 @@ tab1_input <- tabPanel("Input", fluidPage(
 ##### tab2_explore ----
 tab2_explore <- tabPanel("Explore", sidebarLayout(
   fluid = FALSE,
-  ## sidebarPanel: Est idd, PC screeplot
+  ## sidebarPanel: IDE, PC screeplot
   sidebarPanel(width = 4L,
-               ## estimate idd
-               h3("Estimating intrinsic data dimensionality (idd)"),
-               tableOutput("idd_tbl") %>%
+               ## Estimating dim
+               h3("Intrinsic Data Dimensionality Estimate (IDE)"),
+               tableOutput("ide_tbl") %>%
                  shinycssloaders::withSpinner(type = 8L),
                fluidRow(
-                 column(width = 12L, h3(textOutput("est_idd_msg"), align = "center"))
+                 column(width = 12L, h3(textOutput("est_ide_msg"), align = "center"))
                ),
                fluidRow(
                  column(width = 6L, align = "center", actionButton("remove_dim", "< Remove a variable")),
@@ -73,7 +73,7 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
             ## Tour
             h3("Linear embedding"),
             p("A tour -- animations of linear embeddings (orthonormally constrained)"),
-            plotly::plotlyOutput("tour_plotly", width = "1100px", height = "682px") %>%
+            plotly::plotlyOutput("tour_plotly", width = "720px", height = "480") %>%
               shinycssloaders::withSpinner(type = 8L),
             radioButtons("tour_mode", "Tour mode",
                          choices = c("local",
@@ -86,7 +86,7 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
             h3("Non-linear embedding"),
             p("tSNE, non-linear embedding -- distances not Euclidean; be careful with interpretive claims"),
             textOutput("tsne_msg"),
-            plotly::plotlyOutput("tsne_plotly", width = "1100px", height = "682px") %>%
+            plotly::plotlyOutput("tsne_plotly", width = "720px", height = "480px") %>%
               shinycssloaders::withSpinner(type = 8L)
   )
 )) ## Assign tab2_explore

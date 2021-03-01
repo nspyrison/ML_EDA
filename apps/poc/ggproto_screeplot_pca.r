@@ -59,8 +59,8 @@ ggproto_screeplot_pca <- function(pca_obj){
 #' @examples 
 #' dat <- as.matrix(tourr::flea[, 1:6])
 #' pca_obj <- prcomp(dat)
-#' est.idd_pca(pca_obj)
-est.idd_pca <- function(pca_obj, var_cutoff = .9){
+#' est.pca(pca_obj)
+est.pca <- function(pca_obj, var_cutoff = .9){
   cum_var <- df_scree_pca(pca_obj)$cumsum_var
   as.integer(
     min(
@@ -95,7 +95,7 @@ est_idd_vec <- function(data, inc_slow = FALSE){
                return(NA)
              })
   })
-  ret <- c(idd_pca, ret)
+  ret <- c(ide_pca, ret)
   names(ret) <- c("pca@90%", nms)
   return(ret)
 }

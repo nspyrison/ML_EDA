@@ -76,6 +76,7 @@
   idd_agg <- function(vec){round(max(mean(vec, na.rm = TRUE), median(vec, na.rm = TRUE)), 0)}
 }
 
+
 # 2) Loop over data ----
 for(i in 1:7){
   #if(i == 4)browser()
@@ -84,12 +85,12 @@ for(i in 1:7){
   ## d_var, d_std, d_pc, d_stdpc
   c <- clas[[i]]
   d_var <- dat[[i]]
-  d_std <- spinifex::scale_sd(d_var)
+  d_std.sd <- spinifex::scale_sd(d_var)
   idd_var[[i]] <- est_idd_vec(data = d_var, inc_slow = FALSE)
   idd_std[[i]] <- est_idd_vec(data = d_std, inc_slow = FALSE)
   
-  d_pc <- prcomp(d_var)$x[, 1:cm(idd_var[[i]])]
-  d_stdpc <- prcomp(d_std)$x[, 1:cm(idd_std[[i]])]
+  d_pc <- prcomp(d_var)$x[, 1:idd_agg(idd_var[[i]])]
+  d_stdpc <- prcomp(d_std)$x[, 1:idd_agg(idd_std[[i]])]
   idd_pc[[i]] <- est_idd_vec(data = d_pc, inc_slow = FALSE)
   idd_stdpc[[i]] <- est_idd_vec(data = d_stdpc, inc_slow = FALSE)
   
@@ -127,6 +128,8 @@ for(i in 1:7){
   
   # _tsne_space ----
   
+  
+  
 }
 
 
@@ -151,12 +154,12 @@ for(i in 1:7){
   tib_std   <- setup_idd_tib("std")
   tib_pc    <- setup_idd_tib("pc")
   tib_stdpc <- setup_idd_tib("stdpc")
-  tib_idd_out <- cbind(tib_var, 
+  tib_idd_out <- cbind(tib_var,
                        tib_std[, 2:8],
-                       tib_pc[, 2:8], 
+                       tib_pc[, 2:8],
                        tib_stdpc[, 2:8])
   if(F)
     readr::write_excel_csv(tib_idd_out, "./comparison/output/tib_idd_out.csv") ## to go to latex table.
-  
-  
+  str(tib_idd_out)
+  #View(tib_idd_out)
 }

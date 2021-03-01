@@ -129,7 +129,7 @@ server <- function(input, output, session){
     prcomp(proc_dat())
   })
   est_pca80 <- reactive({
-    est.idd_pca(pca_obj(), var_cutoff = .8)
+    est.pca(pca_obj(), var_cutoff = .8)
   })
   alpha <- reactive({min(c(1L, 5L / sqrt(nrow(raw_dat()))))})
   output$pca_msg <- renderText({
@@ -279,10 +279,10 @@ server <- function(input, output, session){
     ret <- rv$curr_dim <- rv$anchor_dim <-ceiling(mean(vec, na.rm = TRUE))
     return(ret)
   })
-  output$est_idd_msg <- renderText({
+  output$ide_msg <- renderText({
     paste0("Initialize to the first ", est_idd(), " PC.") ## Really the ceiling of the mean of the estimates.
   })
-  outputOptions(output, "est_idd_msg", suspendWhenHidden = FALSE) ## Eager evaluation
+  outputOptions(output, "ide_msg", suspendWhenHidden = FALSE) ## Eager evaluation
   
   ### tsne_plotly -----
   output$tsne_plotly <- plotly::renderPlotly({
