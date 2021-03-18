@@ -73,7 +73,7 @@ server <- function(input, output, session){
       is.character(c) | is.factor(c)
     })
   })
-  output$aes_var_nm <- renderUI({
+  aes_opt_var_nms <- reactive({
     req(raw_dat())
     cols_fct_char <- cols_fct_char()
     if(sum(cols_fct_char) > 0L){## If any fct or char columns look there
@@ -84,10 +84,8 @@ server <- function(input, output, session){
     ## Target columns with less than 8 unique values
     cols_lt8 <- sapply(this_dat, function(x) length(unique(x)) <= 8L)
     opts <- colnames(this_dat)[cols_lt8]
-    if(length(cols_lt8) == 0L) opts <- "<no suitable variable found>"
-    
-    selectInput("aes_var_nm", "Color/shape variable",
-                choices = opts, selected = opts[1L], multiple = FALSE)
+    if(length(cols_lt8) == 0L) opts <- "<No variables with less than 8 levels found>"
+    return(opts)
   })
   
   output$subsample_msg <- renderText({
@@ -119,6 +117,20 @@ server <- function(input, output, session){
   })
   output$proc_dat_smry <- renderPrint({summary(proc_dat())})
   
+  output$proc_dat_inputs <- shiny::renderUI({
+    proc_dat <- proc_dat()
+    .nms <- colnames(proc_dat)
+    .aes_opts <- aes_opt_var_nms()
+    fluidRow(
+      column(width = 6,
+             selectInput("y_var_nm", "y, target explanatory variable",
+                         choices = .nms, multiple = FALSE)),
+      column(width = 6,
+             selectInput("aes_var_nm", "color & shape variable",
+                         choices = .aes_opts, selected = .aes_opts[1], multiple = FALSE))
+    )
+  })
+  
   ### Helpers
   p <- reactive({
     req(proc_dat())
@@ -146,8 +158,6 @@ server <- function(input, output, session){
   ### proc_dat_density -----
   output$proc_dat_density <- renderCachedPlot(
     {
-      
-      try <- var2pc_imp() ### TODO REMOVE ME LATER
       req(proc_dat())
       df <- as.data.frame(proc_dat())
       df_long <-
@@ -202,16 +212,13 @@ server <- function(input, output, session){
   }, width = 550L, height = 341L)
   outputOptions(output, "pc_screeplot", suspendWhenHidden = FALSE) ## Eager evaluation
   
-  ### var2pc_imp ----
-  var2pc_imp <- reactive({
+  ### var_perm_imp ----
+  var_perm_imp <- reactive({
     ide() ## Force curr_basis to resolve??
     req(curr_basis())
     pca_obj <- pca_obj()
     pca_obj$rotation ## SOLVE FOR component in 1:rv$curr_dim and rv_curr_dim+1:end.
-    bas_in <- tpca_obj$rotation[,1L:]
-    browser()
     bas <- curr_basis()
-
   })
   
   

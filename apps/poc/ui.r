@@ -14,6 +14,7 @@ require("tidyr")   ## Needed for pivoting, exports `%>%`
 require("shiny")
 require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
+require("DT") ## For html table and buttons
 
 ## Initialize
 mlb_dat <- data(package = "mlbench")$results[, 3L]
@@ -26,8 +27,10 @@ tab1_input <- tabPanel("Input", fluidPage(
       ## Input csv file
       selectInput("data_select", "Data selection, from {mlbench}",
                   choices = mlb_dat),
-      uiOutput("aes_var_nm"),
+      uiOutput("proc_dat_inputs"),
       ## Preprocessing
+      hr(),
+      h3("Preprocessing:"),
       textOutput("na_msg"),
       radioButtons("scale_mode", "scale",
                    choices = c("std dev",
@@ -41,10 +44,17 @@ tab1_input <- tabPanel("Input", fluidPage(
       textOutput("subsample_msg"),
     ),
     ## Main panel display
-    mainPanel(h3("Input data"),
-              verbatimTextOutput("raw_dat_str"),
-              h3("Processed data univariate densities"),
-              plotOutput("proc_dat_density", width = "1100px", height = "682px")
+    mainPanel(
+      fluidRow(
+        column(width = 4L,
+               h3("Input data structure"),
+               verbatimTextOutput("raw_dat_str")),
+        column(width = 8L,
+               h3("Processed data summary"),
+               verbatimTextOutput("proc_dat_smry"))
+      ),
+      h3("Processed data univariate densities"),
+      plotOutput("proc_dat_density", width = "1100px", height = "682px")
     ) ## close mainPanel
 )) ## Assign tab1_input
 
@@ -57,9 +67,7 @@ tab2_explore <- tabPanel("Explore", sidebarLayout(
                h3("Intrinsic Data Dimensionality Estimate (IDE)"),
                tableOutput("ide_tbl") %>%
                  shinycssloaders::withSpinner(type = 8L),
-               fluidRow(
-                 column(width = 12L, h3(textOutput("ide_msg"), align = "center"))
-               ),
+               column(width = 12L, h3(textOutput("ide_msg"), align = "center")),
                fluidRow(
                  column(width = 6L, align = "center", actionButton("remove_dim", "< Remove a variable")),
                  column(width = 6L, align = "center", actionButton("add_dim", "Add a variable >")),
