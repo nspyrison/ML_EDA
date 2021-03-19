@@ -1,31 +1,66 @@
+# if(F) ## Working from: 
+#   browseURL("https://medium.com/responsibleml/treeshap-explain-tree-based-models-with-shap-values-2900f95f426")
+# 
+# #devtools::install_github('ModelOriented/treeshap')
+# ## uses an algorithm to compute SHAP values for tree ensemble models, in polynomial-time, Lundberg et.al (2018)
+# # require("DALEX")
+# # require("treeshap")
+
+
 if(F) ## Working from: 
-  browseURL("https://medium.com/responsibleml/tagged/xai")
+  browseURL("http://ema.drwhy.ai/shapley.html#SHAPRcode")
 
-#library
-library(DALEX)
+titanic_imputed <- archivist::aread("pbiecek/models/27e5c")
+titanic_rf <- archivist::aread("pbiecek/models/4e0fc")
+henry <- archivist::aread("pbiecek/models/a6538")
 
-#apartments dataset from DALEX
-#data have 5 numerical variables and 1 factor
-head(apartments)
+library("randomForest")
+library("DALEX")
 
-#we use one-hot encoding for district variable - one_hot() function from mltools
-data <- mltools::one_hot(data.table::data.table(apartments))
+## Make a DALEX "explainer" of in smaple data
+explain_rf <- DALEX::explain(model = titanic_rf,  
+                             data = titanic_imputed[, -9],
+                             y = titanic_imputed$survived == "yes", 
+                             label = "Random Forest")
+## Predict a single out of sample observation, "Henry"?
+predict(explain_rf, henry)
 
-#we created a random forest model using ranger library
-library(ranger)
-model <- ranger(m2.price~., data = data)
+tictoc::tic("shap_henry")
+shap_henry <- predict_parts(explainer = explain_rf,  ## ~ 10 s @ B=25
+                            new_observation = henry, 
+                            type = "shap",
+                            B = 10)
+tictoc::toc()
+plot(shap_henry, show_boxplots = FALSE)
 
-#we created an explainer with DALEX package
-explainer <- explain(model, data = data, y = data$m2.price)
+print("note that iBreakDown:::print.break_down prints an agg tbl, not the 11 perms tested and desplayed when coerced to tibble.")
+tib_shap_henry <- tibble::as.tibble(shap_henry) ## Note that SHAP is already showing only 7 of 77 branches.
+hist(tib_shap_henry$contribution)
 
 
-# Example for R
+print("why isn't it showing the 7 largest contributions though??")
+library("dplyr")
+tib_shap_henry <- tib_shap_henry %>% arrange(desc(abs(contribution)))
+tib_shap_henry
+unique(tib_shap_henry$variable)
 
-# we created a model_parts object
-mp <- model_parts(explainer, loss_function = loss_root_mean_square)
+## Remade from: iBreakDown:::print.break_down_uncertainty
+## Create the scree df for the local attribution from a DALEX::predict_parts return.
+## !!may have overlap with iBreakDown:::plot.break_down_uncertainty.
+df_scree_local_attr <- function(x, ...){
+  result <- data.frame(
+    label = tapply(x$label, paste(x$label, x$variable, sep = ": "), unique, na.rm = TRUE),
+    variable_name = tapply(x$variable_name, paste(x$label, x$variable, sep = ": "), unique, na.rm = TRUE),
+    variable_value = tapply(x$variable_value, paste(x$label, x$variable, sep = ": "), unique, na.rm = TRUE),
+    median_local_attr = tapply(x$contribution, paste(x$label, x$variable, sep = ": "), median, na.rm = TRUE)
+  )
+  ## Reorder
+  result <- result[order(abs(result$median_local_attr), decreasing = TRUE), ]
+  ## Add cumsum_rate
+  result$cumsum_rate_abs_median_local_attr <- cumsum(abs(result$median_local_attr)) / sum(abs(result$median_local_attr))
+  return(result)
+}
+df_local_attr <- df_scree_local_attr(shap_henry)
 
-# we can see a data.frame with results
-mp
 
-# we can plot the results
-plot(mp)
+iBreakDown:::plot.break_down_uncertainty

@@ -260,10 +260,9 @@ server <- function(input, output, session){
     if(tour_nm == "local"){t_path <- tourr::local_tour(start = bas)}
     
     invisible(utils::capture.output( ## Mute the noisy function
-      t_hist <- save_history(
-        data <- dat,
-        tour_path = t_path,
-        max_bases = 10L
+      t_hist <- save_history(data = dat,
+                             tour_path = t_path,
+                             max_bases = 10L
       )
     ))
     
