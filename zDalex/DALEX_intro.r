@@ -62,5 +62,49 @@ df_scree_local_attr <- function(x, ...){
 }
 df_local_attr <- df_scree_local_attr(shap_henry)
 
+v <- tourr::normalise(df_local_attr$median_local_attr)
 
-iBreakDown:::plot.break_down_uncertainty
+####
+## Trying to go to a toy example
+library(tourr)
+library(spinifex)
+library(ggplot2)
+scaled_full <-  scale_sd(flea[, 1:6])
+f <- scaled_full[-10, 1:6]
+clas <- flea$species[-10]
+my_y <- clas == "Concinna "
+oos_obs <- scaled_full[10, 1:6]
+
+f_rf <- randomForest(my_y~., data = data.frame(f, my_y))
+ex_f_rf <- DALEX::explain(model = f_rf,
+                         data = f,
+                         y = my_y,
+                         label = "Random Forest")
+shap_10 <- predict_parts(explainer = ex_f_rf, ## ~ 10 s @ B=25
+                         new_observation = oos_obs, 
+                         type = "shap",
+                         B = 10)
+plot(shap_10)#, show_boxplots = FALSE)
+
+
+f_local_attr <- df_scree_local_attr(shap_10) ## 1 shap for each class :/...
+f_local_attr_heikert <- f_local_attr[f_local_attr$label == "Random Forest.Heikert. ",]
+v <- tourr::normalise(f_local_attr_heikert$median_local_attr[-7]) ## wants to be ordered by orig data order.
+olda <- basis_olda(f, my_y)
+
+v.olda <- cbind(as.data.frame(v), olda)
+colnames(v.olda) <- c("local_attr", "ld1", "ld2")
+bas <- as.matrix(tourr::orthonormalise(v.olda)[, 1:2])
+
+proj <- f %*% bas
+proj_oos_obs <- data.frame(matrix(oos_obs, nrow=1) %*% bas)
+
+view_frame(bas, f,
+           aes_args = list(color = clas, shape = clas)) + 
+  geom_point(aes(x = local_attr, y = ld1), proj_oos_obs, color = "red", size = 5, shape = 4) +
+  theme(axis.title = element_text(),
+        legend.position = "bottom",
+        legend.direction = "horizontal", legend.box = "vertical") +
+  xlab("SHAP/normalized local attr") + ylab("LD1") +
+  ggtitle("Linear proj of Flea", "scale_sd, rm 1 obs, RF, SHAP, OLDA, orthonormalize(SHAP, LD1)")
+
