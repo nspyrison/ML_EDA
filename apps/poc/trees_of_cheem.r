@@ -70,6 +70,7 @@ basis_cheem <- function(data, class, new_observation, new_observation_class,
   
   #attr(.cheem_bas, "class") <- c("matrix", "cheem basis")
   attr(.cheem_bas, "data") <- as.matrix(data)
+  attr(.cheem_bas, "data_class") <- class
   attr(.cheem_bas, "new_observation") <- as.matrix(new_observation)
   attr(.cheem_bas, "new_observation_class") <- new_observation_class
   attr(.cheem_bas, "predict_parts") <- .parts
@@ -83,15 +84,17 @@ basis_cheem <- function(data, class, new_observation, new_observation_class,
 #' oos_obs <- scaled_full[10,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
 #' clas <- flea$species[-10]
 #' oos_clas <- flea$species[10]
-#' 
 #' bas_cheem <- basis_cheem(dat, clas, oos_obs, oos_clas)
 #' 
 #' view_cheem(bas_cheem)
 #' 
 #' view_cheem(bas_cheem, show_boxplots = FALSE, max_features = 4)
+#' 
+#' if(F)
+#'   ggsave("PoC_view_cheem.pdf", device ="pdf", width = 6, height = 3, units="in")
 view_cheem <- function(cheem_basis, show_parts = TRUE, ...){
   .data <- attributes(cheem_basis)$data
-  .class <- attributes(cheem_basis)$class
+  .class <- attributes(cheem_basis)$data_class
   .new_obs <- attributes(cheem_basis)$new_observation
   .new_obs_class <- attributes(cheem_basis)$new_observation_class
   .cn <- colnames(cheem_basis)
@@ -111,7 +114,7 @@ view_cheem <- function(cheem_basis, show_parts = TRUE, ...){
   if(show_parts == TRUE){
     require("cowplot")
     .parts <- attributes(cheem_basis)$predict_parts
-    gg <- cowplot::plot_grid(gg, plot(.parts, ...), nrow = 1L, rel_widths = c(1.3, 1L))
+    gg <- cowplot::plot_grid(gg, plot(.parts, ...), nrow = 1L, rel_widths = c(1.2, 1L))
   }
   return(gg)
 }
