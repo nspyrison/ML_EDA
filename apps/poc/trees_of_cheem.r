@@ -47,7 +47,8 @@ basis_cheem <- function(data, class, new_observation, new_observation_class,
                                  new_observation = new_observation,
                                  type = parts_type,
                                  N = parts_N,
-                                 B = parts_B)
+                                 B = parts_B,
+                                 ...)
   
   .scree_la <- df_scree_local_attr(.parts) ## 1 shap for each class :/...
   ## TODO: Does aggregating across class make sense? do we need to generalize to multi class.
@@ -56,7 +57,7 @@ basis_cheem <- function(data, class, new_observation, new_observation_class,
                  olda = basis_olda(data, class),
                  pca  = basis_pca(data),
                  odp  = basis_odp(data, class),
-                 onpp = basis_onpp(data, ...),
+                 onpp = basis_onpp(data), ## Hardcoded defaults
                  stop("basis_type expects 'olda', 'pca', 'odp' or 'onpp'.")
   )
   

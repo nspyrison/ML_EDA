@@ -1,0 +1,160 @@
+---
+title: "Trees of Cheem"
+author: "Nicholas Spyrison"
+date: "`r Sys.Date()`"
+output: html_document
+---
+<!--   #rmarkdown::html_vignette -->
+<!-- # vignette: > -->
+<!-- #   %\VignetteIndexEntry{spinifex} -->
+<!-- #   %\VignetteEngine{knitr::rmarkdown} -->
+<!-- #   %\VignetteEncoding{UTF-8}{inputenc} -->
+<!-- #   \usepackage[utf8]{inputenc} -->
+
+<!-- #Example vignette: 
+https://github.com/njtierney/naniar/blob/master/vignettes/getting-started-w-naniar.Rmd -->
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,   # code
+  include    = TRUE,   # plots
+  eval       = TRUE,   # chunk
+  message    = FALSE,
+  warning    = FALSE,
+  error      = FALSE,
+  collapse   = TRUE
+)
+```
+
+# Intro to trees of cheem
+
+## Requirements
+
+```{R}
+require("DALEX")
+require("treeshap")
+require("spinifex")
+require("tourr")
+require("ggplot2")
+## esp. for basis_cheem() and view_cheem()
+#### basic examples also given in file.
+source("../apps/poc/trees_of_cheem.r") 
+# file.edit("./apps/poc/trees_of_cheem.r")
+```
+
+## Data setup
+
+```{R}
+str(tourr::flea)
+std_df <- spinifex::scale_sd(tourr::flea[, 1:6])
+holdout_obs <- 10
+
+dat <- std_df[-holdout_obs, 1:6]
+oos_obs <- std_df[holdout_obs,, drop = FALSE] ## Keep as a data.frame
+clas <- flea$species[-holdout_obs]
+oos_clas <- flea$species[holdout_obs]
+```
+
+## Find a start basis
+
+```{r}
+cheem_bas <- basis_cheem(
+  data = dat,
+  class = clas,
+  new_observation = oos_obs,
+  new_observation_class = oos_clas,
+  ## Selecting DALEX::predict_parts()
+  parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
+  parts_B = 10,
+  parts_N = NULL,
+  ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
+  basis_type = "olda")
+## ... passes to DALEX::predict_parts()
+```
+
+## View the starting basis
+
+```{r}
+view_cheem(cheem_basis = cheem_bas,
+           show_parts = TRUE) 
+## ... passes to DALEX::plot.predict_parts()
+```
+
+## Tour the space
+
+### Short cheem tour, 4 target bases
+
+```{r}
+if(interactive())
+  ?spinifex::play_tour_path()
+## tour_path wants an array of target bases to tourr::interpolate() between.
+
+## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
+.bas_types <- c('olda', 'pca', 'odp', 'onpp')
+tgt_bases <- array(NA, dim = c(dim(cheem_bas), length(.bas_types))) ## init
+mute <- sapply(seq_along(.bas_types), function(i){
+  tgt_bases[,, i] <<- 
+    basis_cheem(dat, clas, oos_obs, oos_clas,
+                ## X axis is always this SHAPely values
+                parts_type = "shap",
+                parts_B = 10,
+                parts_N = NULL,
+                ## Vary across components on Y axis, expects 'olda', 'pca', 'odp' or 'onpp'
+                basis_type = .bas_types[i])
+})
+## Format for tourr::interpolate() 
+tgt_bases <- as_history_array(tgt_bases, dat)
+
+## Aesthetic init
+.colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
+.col <- .colorPal[as.integer(clas)]
+.col[holdout_obs] <- "red"
+.shp <- as.integer(clas)
+.shp[holdout_obs] <- 4 ## shape 8 is *
+.alp <- rep(0.4, nrow(dat))
+.alp[holdout_obs] <- .7
+.siz <- rep(1.5, nrow(dat))
+.siz[holdout_obs] <- 6
+
+## Tour animation
+spinifex::play_tour_path(
+  tour_path = tgt_bases, 
+  data = dat,
+  ## position of the basis unit circle
+  ## expects:  "center", "left", "right", "bottomleft", "topright", or "off"
+  axes = "left", 
+  angle = .05, ## step size distance between interpolation planes 
+  fps = 8, 
+  ## list that would go inside ggplot2::geom_point(aes(X))
+  aes_args = list(), 
+  ## list that would go inside geom, outside aes: ggplot2::geom_point(aes(), X)
+  identity_args = list(color = .col, shape = .shp,
+                       size = .siz, alpha = .alp),
+  ## list of items to "add" to a ggplot() + X
+  ggproto = list(spinifex::theme_spinifex()),
+  ## expects render_gganimate (.gif) or render_plotly (.html widget)
+  render_type = render_plotly
+)
+## For saving, store output of spinifex::play_tour_path()
+# ?gganimate::anim_save() ## with render_gganimate
+# ?htmlwidgets::saveWidget() ## with render_gganimate
+```
+
+### Frozen tour route
+
+```{r}
+if(interactive())
+  ?tourr::frozen_tour
+
+## Create a freezing matrix of dim == basis
+freezer_mat <- matrix(NA, nrow = nrow(cheem_bas), ncol = ncol(cheem_bas))
+## Try to freeze the first columns, the SHAP values.
+freezer_mat[, 1] <- .99 * (1 / nrow(cheem_bas))
+
+## Tour attempt errorring 
+if(interactive())
+  tourr::animate_xy(data = dat,
+                    tour_path = tourr::frozen_tour(frozen = freezer_mat),
+                    start = cheem_bas)
+## R> Error in svd(t(Fa) %*% Fz) : infinite or missing values in 'x'
+```
+
