@@ -120,6 +120,47 @@ view_cheem <- function(cheem_basis, show_parts = TRUE, ...){
   return(gg)
 }
 
+#' @examples 
+#' ## Setup
+#' dat_std <- tourr::rescale(wine[, 2:14])
+#' clas <- wine$Type
+#' bas <- basis_pca(dat_std)
+#' mv <- manip_var_of(bas)
+#' 
+#' ## Radial tour array to long df, as used in play_manual_tour()
+#' tour_array <- manual_tour(basis = bas, manip_var = mv)
+#' 
+ggbasis_array <- function(basis_array,
+                          data = NULL,
+                          label = NULL,
+                          axes = "center",
+                          manip_col = "blue",
+                          line_size = 1L,
+                          text_size = 5L,
+                          aes_args = list(),
+                          identity_args = list(),
+                          ggproto = list(theme_spinifex())){
+  ls_df <- spinifex::array2df(tour_array, data = data)
+  ## see spinifex::render_
+  #### Initialize
+  basis_frames  <- ls_df$basis_frames
+  n_frames      <- length(unique(basis_frames$frame))
+  p             <- nrow(basis_frames) / n_frames
+  d             <- 2L ## Hard-coded assumption for 2D display
+  aes_args      <- as.list(aes_args)
+  identity_args <- as.list(identity_args)
+  ggproto       <- as.list(ggproto)
+  
+  ## If data exists; fix arg length and plot MUST COME BEFORE AXES
+  data_frames <- frames$data_frames ## May be null.
+}
+
+if(F){
+  spinifex::array2df
+  ?spinifex::array2df
+}
+
+
 ### EMA paper examples, recreating source ----
 #' @examples 
 #' ## Working form source examples:
