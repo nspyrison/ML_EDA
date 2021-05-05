@@ -35,7 +35,6 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 #'             parts_type = "break_down", parts_B = 15, parts_N = 100, basis_type = "pca")
 basis_cheem <- function(data, class, new_observation, new_observation_class,
                         parts_type = "shap", parts_B = 10, parts_N = NULL, basis_type = "olda", ...){
-  if(basis_type != "olda") message("olda is the only basis implemented.")
   .clas_test <- class == new_observation_class
   .rf <- randomForest::randomForest(.clas_test~., data = data.frame(data, .clas_test))
   .ex_rf <- DALEX::explain(model = .rf,
@@ -113,9 +112,9 @@ view_cheem <- function(cheem_basis, show_parts = TRUE, ...){
                .proj_new_obs, color = "red", size = 5L, shape = 8L)
     
   if(show_parts == TRUE){
-    require("cowplot")
+    require("patchwork")
     .parts <- attributes(cheem_basis)$predict_parts
-    gg <- cowplot::plot_grid(gg, plot(.parts, ...), nrow = 1L, rel_widths = c(1.2, 1L))
+    gg <- gg + plot(.parts, ...)
   }
   return(gg)
 }

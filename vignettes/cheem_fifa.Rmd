@@ -3,6 +3,8 @@ title: "Cheem example: FIFA"
 author: "Nicholas Spyrison"
 date: "`r Sys.Date()`"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 <!--   #rmarkdown::html_vignette -->
 <!-- # vignette: > -->
@@ -21,7 +23,8 @@ knitr::opts_chunk$set(
   message    = FALSE,
   warning    = FALSE,
   error      = FALSE,
-  collapse   = TRUE
+  collapse   = TRUE,
+  cache = TRUE
 )
 ```
 
@@ -34,6 +37,7 @@ Here we start with the intro `trees_of_cheem.rmd` applied to tourr::flea data an
 ```{R}
 require("DALEX")
 require("treeshap")
+#devtools::install_github('ModelOriented/treeshap')
 require("spinifex")
 require("tourr")
 require("ggplot2")
@@ -41,7 +45,6 @@ require("ggplot2")
 #### basic examples also given in file.
 source("../apps/poc/trees_of_cheem.r") 
 # file.edit("./apps/poc/trees_of_cheem.r")
-
 require("tictoc")
 ```
 
@@ -49,43 +52,72 @@ require("tictoc")
 
 ```{R}
 raw <- DALEX::fifa
-str(raw)
-.rn <- row.names(raw)
 
-std_df <- spinifex::scale_sd(raw[, -1])
-holdout_obs <- which(.rn =="L. Messi")
+## subset for performance
+require(dplyr)
+.top_nationality <-
+  table(raw$nationality) %>%
+  as.data.frame() %>%
+  top_frac(.25)
+## Removes 20% of obs to reduced class levels by 75%
+#### remove the filtered nationalities from the levels.
+sub <- raw %>% 
+  filter(nationality %in% .top_nationality$Var1) %>% 
+  mutate(nationality = as.factor(as.character(nationality))) 
+
+
+str(sub)
+.rn <- row.names(sub)
+tgt_name <- "L. Messi"
+
+std_df <- spinifex::scale_sd(sub[, -1])
+holdout_obs <- which(.rn == tgt_name)
 
 dat <- std_df[-holdout_obs, ]
 oos_obs <- std_df[holdout_obs,, drop = FALSE] ## Keep as a data.frame
-clas <- raw[-holdout_obs, 1]
-oos_clas <- raw[holdout_obs, 1]
+clas <- sub[-holdout_obs, 1]
+oos_clas <- sub[holdout_obs, 1]
 ```
 
 ## Find a start basis
 
 ```{r}
-##TODO: COntinue here, debug error.
-tic("basis_cheem()")
-cheem_bas <- basis_cheem(
-  data = dat,
-  class = clas,
-  new_observation = oos_obs,
-  new_observation_class = oos_clas,
-  ## Selecting DALEX::predict_parts()
-  parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
-  parts_B = 10,
-  parts_N = NULL,
-  ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
-  basis_type = "olda")
-## ... passes to DALEX::predict_parts()
-toc()
+message("There is an error with Rdimtools::do.olda(). Due to the sparsity of the class vector? we'll fall back to pca for robustness.")
+
+
+{
+  tic("basis_cheem()")
+  cheem_bas <- basis_cheem(
+    data = dat,
+    class = clas,
+    new_observation = oos_obs,
+    new_observation_class = oos_clas,
+    ## Selecting DALEX::predict_parts()
+    parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
+    parts_B = 10,
+    parts_N = NULL,
+    ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
+    basis_type = "pca")
+  ## ... passes to DALEX::predict_parts()
+  toc()
+  ## raw: 127 sec, top 25% nationalities, (80% obs) 88sec
+}
 ```
 
 ## View the starting basis
 
 ```{r}
+##TODO: another error;
+# Error in `[.data.frame`(df, setdiff(names(df), names(transformed))) : 
+#   undefined columns selected
+# In addition: Warning message:
+# Duplicated aesthetics after name standardisation: 
+### IIRC this is is the same issue that came up when trying to abstract spinifex functions...
+# debugonce(view_cheem)
+# debugonce(view_frame)
+paste0("view_cheem: ", tgt_name)
 view_cheem(cheem_basis = cheem_bas,
-           show_parts = TRUE) 
+           show_parts = TRUE)
 ## ... passes to DALEX::plot.predict_parts()
 ```
 
@@ -99,10 +131,10 @@ if(interactive())
 ## tour_path wants an array of target bases to tourr::interpolate() between.
 
 ## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
-.bas_types <- c('olda', 'pca', 'odp', 'onpp')
+.bas_types <- c('pca', 'odp', 'onpp') ## 'olda'
 tgt_bases <- array(NA, dim = c(dim(cheem_bas), length(.bas_types))) ## init
-mute <- sapply(seq_along(.bas_types), function(i){
-  tgt_bases[,, i] <<- 
+.mute <- sapply(seq_along(.bas_types), function(i){
+  tgt_bases[,, i] <<-
     basis_cheem(dat, clas, oos_obs, oos_clas,
                 ## X axis is always this SHAPely values
                 parts_type = "shap",
@@ -132,7 +164,7 @@ spinifex::play_tour_path(
   ## position of the basis unit circle
   ## expects:  "center", "left", "right", "bottomleft", "topright", or "off"
   axes = "left", 
-  angle = .05, ## step size distance between interpolation planes 
+  angle = .15, ## step size distance between interpolation planes 
   fps = 8, 
   ## list that would go inside ggplot2::geom_point(aes(X))
   aes_args = list(), 
@@ -142,29 +174,10 @@ spinifex::play_tour_path(
   ## list of items to "add" to a ggplot() + X
   ggproto = list(spinifex::theme_spinifex()),
   ## expects render_gganimate (.gif) or render_plotly (.html widget)
-  render_type = render_plotly
+  render_type = render_plotly,
+  tooltip = c("id") ## only adds tool tips on axes segmetns not projection points.
 )
 ## For saving, store output of spinifex::play_tour_path()
 # ?gganimate::anim_save() ## with render_gganimate
 # ?htmlwidgets::saveWidget() ## with render_gganimate
 ```
-
-### Frozen tour route
-
-```{r}
-if(interactive())
-  ?tourr::frozen_tour
-
-## Create a freezing matrix of dim == basis
-freezer_mat <- matrix(NA, nrow = nrow(cheem_bas), ncol = ncol(cheem_bas))
-## Try to freeze the first columns, the SHAP values.
-freezer_mat[, 1] <- .99 * (1 / nrow(cheem_bas))
-
-## Tour attempt errorring 
-if(interactive())
-  tourr::animate_xy(data = dat,
-                    tour_path = tourr::frozen_tour(frozen = freezer_mat),
-                    start = cheem_bas)
-## R> Error in svd(t(Fa) %*% Fz) : infinite or missing values in 'x'
-```
-
