@@ -62,19 +62,21 @@ ggproto_screeplot_pca <- function(pca_obj){
 #' est.pca(pca_obj)
 est.pca <- function(pca_obj, var_cutoff = .9){
   cum_var <- df_scree_pca(pca_obj)$cumsum_var
-  as.integer(
+  ret <- as.integer(
     min(
       which(cum_var > 100L * var_cutoff)
     )
   )
+  names(ret) <- paste0("pca_cumvar=", 100L * var_cutoff, "%")
+  return(ret)
 }
 
 #' @example 
 #' dat <- as.matrix(tourr::flea[, 1:6])
-#' ide_vec(data = dat, inc_slow = FALSE)
-#' ide_vec(data = dat, inc_slow = TRUE)
+#' ide_vect(data = dat, inc_slow = FALSE)
+#' ide_vect(data = dat, inc_slow = TRUE)
 ide_vect <- function(data, inc_slow = FALSE){
-  idd_pca <- est.pca(prcomp(data), .9)
+  ide_pca <- est.pca(prcomp(data), .9)
   ls_funcs <- list(Rdimtools::est.boxcount, Rdimtools::est.correlation,
                    Rdimtools::est.made, Rdimtools::est.mle2,
                    Rdimtools::est.twonn)
@@ -96,6 +98,6 @@ ide_vect <- function(data, inc_slow = FALSE){
              })
   })
   ret <- c(ide_pca, ret)
-  names(ret) <- c("pca@90%", nms)
+  names(ret) <- c(names(ide_pca), nms)
   return(ret)
 }

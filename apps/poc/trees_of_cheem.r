@@ -33,15 +33,24 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 #' 
 #' basis_cheem(dat, clas, oos_obs, oos_clas,
 #'             parts_type = "break_down", parts_B = 15, parts_N = 100, basis_type = "pca")
-basis_cheem <- function(data, class, new_observation, new_observation_class,
+basis_cheem <- function(data, class, holdout_rownum,
                         parts_type = "shap", parts_B = 10, parts_N = NULL, basis_type = "olda", ...){
+  ## Assumed formats
+  data <- as.data.frame(data)
+  class <-  as.factor(class)
+  ## Remove holdout obs
+  oos_dat <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
+  oos_clas <- class[holdout_rownum]
+  ## Remaining data 
+  data <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
+  class <- class[holdout_rownum]
+  
   .clas_test <- class == new_observation_class
   .rf <- randomForest::randomForest(.clas_test~., data = data.frame(data, .clas_test))
   .ex_rf <- DALEX::explain(model = .rf,
                            data = data,
                            y = .clas_test,
                            label = "Random Forest")
-  
   .parts <- DALEX::predict_parts(explainer = .ex_rf, ## ~ 10 s @ B=25
                                  new_observation = new_observation,
                                  type = parts_type,

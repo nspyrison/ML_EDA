@@ -2,20 +2,17 @@
 title: "Cheem example: FIFA"
 author: "Nicholas Spyrison"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document:
+    toc: true
+    theme: united
 editor_options: 
   chunk_output_type: console
 ---
-<!--   #rmarkdown::html_vignette -->
-<!-- # vignette: > -->
-<!-- #   %\VignetteIndexEntry{spinifex} -->
-<!-- #   %\VignetteEngine{knitr::rmarkdown} -->
-<!-- #   %\VignetteEncoding{UTF-8}{inputenc} -->
-<!-- #   \usepackage[utf8]{inputenc} -->
 
 <!-- #Example vignette: 
 https://github.com/njtierney/naniar/blob/master/vignettes/getting-started-w-naniar.Rmd -->
-```{r setup, include = FALSE}
+```{r knitr setup, include = FALSE}
 knitr::opts_chunk$set(
   echo       = TRUE,   # code
   include    = TRUE,   # plots
@@ -26,87 +23,250 @@ knitr::opts_chunk$set(
   collapse   = TRUE,
   cache = TRUE
 )
+## Set dir relative to package
+knitr::opts_knit$set(root.dir = '..')
 ```
 
 # Example application of Trees of Cheem
 
-Here we start with the intro `trees_of_cheem.rmd` applied to tourr::flea data and set off to recreate for DALEX::fifa. We have a sizeable set, with many classes, so we'll also apply `{tictoc}` do get a sense of performance
+Here we start with the intro `trees_of_cheem.rmd` applied to tourr::flea data and set off to apply Cheem functions to DALEX::fifa, 5000 soccer/football players, with 42 columns. 
 
-## Requirements
+We have a sizable set, with many classes, so we'll use knitr cacheing, and watch performance with `{tictoc}` and `{lineprof}` to get a sense of performance.
+
+## Dependancies
 
 ```{R}
+## CRAN
 require("DALEX")
-require("treeshap")
-#devtools::install_github('ModelOriented/treeshap')
 require("spinifex")
 require("tourr")
 require("ggplot2")
-## esp. for basis_cheem() and view_cheem()
-#### basic examples also given in file.
-source("../apps/poc/trees_of_cheem.r") 
-# file.edit("./apps/poc/trees_of_cheem.r")
 require("tictoc")
+## Github
+if(require("treeshap") == FALSE)
+  devtools::install_github('ModelOriented/treeshap')
+require("treeshap")
+if(require("lineprof") == FALSE)
+  devtools::install_github('hadley/lineprof')
+require("lineprof")
+## Local functions, esp. for basis_cheem() and view_cheem()
+source("./apps/poc/trees_of_cheem.r")
+if(F) ## Manualy run to view file:
+  file.edit("./apps/poc/trees_of_cheem.r")
 ```
 
 ## Data setup
 
+The column `overall` is an aggregate measure of current skill, we'll use this as the target variable, discard `nationality` and other potential target variables `potential`, `value_eur`, `wage_eur`. We normalize the remaining columns by their own standard deviation. 
+
+Because of the column names having grouped naming, see the the first suffix of the measure names, _ie_ `attacking`, `skill`, `movement.` We have reasons to be concerned that the data may contain highly correlated variables. We suspect that the true dimensionality of the data is much less than 40. 
+
 ```{R}
 raw <- DALEX::fifa
+str(raw)
 
-## subset for performance
-require(dplyr)
-.top_nationality <-
-  table(raw$nationality) %>%
-  as.data.frame() %>%
-  top_frac(.25)
-## Removes 20% of obs to reduced class levels by 75%
-#### remove the filtered nationalities from the levels.
-sub <- raw %>% 
-  filter(nationality %in% .top_nationality$Var1) %>% 
-  mutate(nationality = as.factor(as.character(nationality))) 
+## Remove some columns
+require("dplyr")
+sub <- raw
+sub <- sub %>%
+  select(-c(`nationality`, `potential`, `value_eur`, `wage_eur`))
 
+## Normalize each column by its standard deviations
+sub <- spinifex::scale_sd(sub) %>% data.matrix()
 
-str(sub)
-.rn <- row.names(sub)
-tgt_name <- "L. Messi"
-
-std_df <- spinifex::scale_sd(sub[, -1])
-holdout_obs <- which(.rn == tgt_name)
-
-dat <- std_df[-holdout_obs, ]
-oos_obs <- std_df[holdout_obs,, drop = FALSE] ## Keep as a data.frame
-clas <- sub[-holdout_obs, 1]
-oos_clas <- sub[holdout_obs, 1]
+## intrisic data dimensionality concerns; even the column names are grouped measures.
+colnames(sub)
 ```
 
-## Find a start basis
+## Intrinsic Dimension Estimation
+
+### Correlation
+
+Thoughts: Goalkeeping clearly bloated and unique, first 15 or so dim also seem redundant as well as a chunk in the middle. Let's see what PCA scree plot looks like.
 
 ```{r}
-message("There is an error with Rdimtools::do.olda(). Due to the sparsity of the class vector? we'll fall back to pca for robustness.")
+#### 1) Correlation
+require("corrplot")
+tic("correlation")
+cor_mat <- cor(sub)
+corrplot(cor_mat,
+         method = "circle", ## geom
+         type = "upper", ## only upper triangle
+         diag = F, ## remove auto correlation
+         order = "AOE", ## Angle of eigenvectors
+         tl.col="black", tl.srt=90, ## Text label color and rotation
+         tl.pos = "td")
+toc()
+```
 
+### PCA Screeplot
+
+Looks like 20 dims add almost nothing. Eyeballing it, I would subjectively select 6 or 11 dimensions as elbows to approximate the data. Let's see how that compares to empirical estimates, powered by `{Rdimtools}`.
+
+```{r}
+#### 2) PCA
+source("./apps/poc/ggproto_screeplot_pca.r") ## Load some local functions, designed for ML EDA
+if(F)
+  file.edit("./apps/poc/ggproto_screeplot_pca.r")
+
+tic("PCA & scree")
+pca_obj <- prcomp(sub)
+palette(RColorBrewer::brewer.pal(8, "Dark2"))
+ggplot2::ggplot() + ggproto_screeplot_pca(pca_obj) + ggtitle("PCA screeplot, fifa data")
+toc()
+```
+
+### `{Rdimtools}` empirical estimations
+
+Alright, not too shabby. For more empirical methods one might select 12 to 16 dimensions, but as the dimensionality increases the volume of the phase space (and thus viewing space of linear projections) increases exponentially. Additionally it looks like the the name suffix of the columns doesn't fit the order of the angle of the eigenvectors. In light of these two I am going to approximate the data with the first 6 Principal components. Unfortunately these are less interpretable than the column names, so the trick will be too convert components back to the original variable space.
+
+```{r}
+tic("Rdimtools IDE (only the faster tests).")
+ide_vect(data = sub, inc_slow = FALSE)
+toc()
+dat <- pca_obj$x[, 1:6]
+```
+
+
+## Standard PCA
+
+"We approximate our 42-dim data in just 6 PC, and visually look for clusters and outliers, wow"
+
+```{r}
+tic("ggpairs, first 6 PC")
+GGally::ggpairs(as.data.frame(dat))
+toc()
+```
+
+## Grand Tour, random bases
+
+```{r}
+str(dat)
+t_array <- tourr::save_history(data = dat, max_bases = 10, ## number of random bases to use
+                               tour_path = grand_tour())
+
+tic("render grand tour animimation")
+spinifex::play_tour_path(
+  t_array, 
+  angle = .2, ## Distance interpolated in radians
+  axes = "left",
+  render_type = render_plotly, ## or render_gganimate for a .gif
+  identity_args = list(alpha = .1),
+  ggproto = list(theme_spinifex(),
+                 ggtitle("Grand tour, 10 rand bases, interp w/ angle = .2")
+  )
+)
+toc()
+```
+
+## Guided Tour, simulated annealing on objective function
+
+```{r}
+tic("find cmass")
+bas_cmass <- spinifex::basis_guided(dat, tourr::cmass())
+toc()
+tic("find holes")
+t_array <- tourr::save_history(data = dat,
+                               tour_path = guided_tour(holes()), 
+                               start = bas_cmass)
+toc()
+
+tic("render guided tour")
+spinifex::play_tour_path(
+  t_array, 
+  angle = .05, ## distance interpolated in radians
+  axes = "left",
+  render_type = render_plotly, ## or render_gganimate for a .gif
+  identity_args = list(alpha = .1),
+  ggproto = list(theme_spinifex(),
+                 ggtitle("Guided tour, simulated annealing from cmass() to holes()")
+  )
+)
+toc()
+```
+
+
+## Manual Tour, manipulate select variable
+```{r}
+bas <- spinifex::basis_half_circle(dat)
+
+tic("render manual tour")
+spinifex::play_manual_tour(
+  bas, dat, manip_var = 4,
+  angle = .1, ## distance interpolated in radians
+  axes = "left",
+  render_type = render_plotly, ## or render_gganimate for a .gif
+  identity_args = list(alpha = .1),
+  ggproto = list(theme_spinifex(),
+                 ggtitle("manual tour, PCA is sensitive to the cluster, explore orthogonally")
+  )
+)
+toc()
+```
+
+
+## Outlier detection
+
+It has been some years before I regularly worked with people that follow soccer closely; I would be hard pressed to name players outside of Beckham and Messi. It was like pulling teeth to get suggestions from the lab, when asking for outliers, eventually I got `L. Suarez`. But I wanted a more empirical measure, Mahalanobis distance is fast and straightforeward, I'll grab a few names from there.
+
+```{r}
+maha_dist <-
+  mahalanobis(sub, colMeans(sub), cov(sub)) %>%
+  sort(decreasing = T)
+
+head(maha_dist, n = 6L)
+psych::outlier(sub, bad = )
+
+## check the maha dist of our original name, 
+.mh_nms <- names(maha_dist)
+tgt_name <- "L. Messi"
+tgt_name2 <- "L. Suarez"
+.idx1 <- which(.mh_nms == tgt_name)
+.idx2 <- which(.mh_nms == tgt_name2)
+paste0(tgt_name, " has the ", .idx1, 
+       "-th highest mahalanobis distance, a value with a value of ", 
+       round(maha_dist[.idx1], 1), ".")
+paste0(tgt_name2, " has the ", .idx2, 
+       "-th highest mahalanobis distance, a value with a value of ", 
+       round(maha_dist[.idx2], 1), ".")
+
+## Highest distance:
+paste0(.mh_nms[1], " has the  highest mahalanobis distance, a value with a value of ", 
+       round(maha_dist[1], 1), ".")
+tgt_nm <- .mh_nms[1]
+```
+
+## Find a Cheem basis
+
+The basis_cheem function was based on classification supervised data, make have to add condition handling for the continuous case.
+
+```{r, eval=FALSE}
+## Apply to the most outlying obs.
+.rn <- row.names(sub)
+.idx1 <- which(.mh_rn == tgt_nm1)
 
 {
   tic("basis_cheem()")
   cheem_bas <- basis_cheem(
     data = dat,
     class = clas,
-    new_observation = oos_obs,
-    new_observation_class = oos_clas,
+    holdout_rownum = .idx1, 
     ## Selecting DALEX::predict_parts()
     parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
     parts_B = 10,
     parts_N = NULL,
     ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
     basis_type = "pca")
-  ## ... passes to DALEX::predict_parts()
   toc()
-  ## raw: 127 sec, top 25% nationalities, (80% obs) 88sec
+  ## 1) raw: 127 sec, 
+  ## 2) top 25% nationalities,(80% obs) 88sec, 
+  ## 3) predicting `overall`, 
 }
 ```
 
 ## View the starting basis
 
-```{r}
+```{r, eval=FALSE}
 ##TODO: another error;
 # Error in `[.data.frame`(df, setdiff(names(df), names(transformed))) : 
 #   undefined columns selected
@@ -121,11 +281,11 @@ view_cheem(cheem_basis = cheem_bas,
 ## ... passes to DALEX::plot.predict_parts()
 ```
 
-## Tour the space
+## Cheem tour
 
 ### Short cheem tour, 4 target bases
 
-```{r}
+```{r, eval=FALSE}
 if(interactive())
   ?spinifex::play_tour_path()
 ## tour_path wants an array of target bases to tourr::interpolate() between.
