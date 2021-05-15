@@ -130,7 +130,9 @@ dat <- pca_obj$x[, 1:6]
 
 ## Standard PCA
 
-"We approximate our 42-dim data in just 6 PC, and visually look for clusters and outliers, wow"
+gist:
+"We approximate our 42-dim data in just 6 PC, ignore the rest and only look at discrete orthogonal pairs of these first 6 PC."
+
 
 ```{r}
 tic("ggpairs, first 6 PC")
@@ -138,11 +140,17 @@ GGally::ggpairs(as.data.frame(dat))
 toc()
 ```
 
-## Grand Tour, random bases
+## Data visualization _tours_
 
-```{r}
+Why are we only looking at discrete orthogonal pairs though. Instead of having a 6D cube and only looking at squarely at the sides, lets have a continuus view of the intermediate frames as well; tours.
+
+Tours are animation of linear projections over (near-)continuous changes to the projection basis. There are different types/flavors of tours which are distinguished by their basis paths.
+
+### Grand Tour, random bases
+
+```{r, results='hide'}
 str(dat)
-t_array <- tourr::save_history(data = dat, max_bases = 10, ## number of random bases to use
+t_array <- tourr::save_history(data = dat, max_bases = 10, ## Number of random bases to use
                                tour_path = grand_tour())
 
 tic("render grand tour animimation")
@@ -159,9 +167,9 @@ spinifex::play_tour_path(
 toc()
 ```
 
-## Guided Tour, simulated annealing on objective function
+### Guided Tour, simulated annealing on objective function
 
-```{r}
+```{r, results='hide'}
 tic("find cmass")
 bas_cmass <- spinifex::basis_guided(dat, tourr::cmass())
 toc()
@@ -186,7 +194,7 @@ toc()
 ```
 
 
-## Manual Tour, manipulate select variable
+### Manual Tour, manipulate selected variable
 ```{r}
 bas <- spinifex::basis_half_circle(dat)
 
@@ -207,7 +215,7 @@ toc()
 
 ## Outlier detection
 
-It has been some years before I regularly worked with people that follow soccer closely; I would be hard pressed to name players outside of Beckham and Messi. It was like pulling teeth to get suggestions from the lab, when asking for outliers, eventually I got `L. Suarez`. But I wanted a more empirical measure, Mahalanobis distance is fast and straightforeward, I'll grab a few names from there.
+It has been some years before I regularly worked with people that follow soccer closely; I would be hard pressed to name players outside of Beckham and Messi. It was like pulling teeth to get suggestions from the lab, when asking for outliers, eventually I got `L. Suarez`. But I wanted a more empirical measure, Mahalanobis distance is fast and straightforward, I'll grab a few names from there.
 
 ```{r}
 maha_dist <-
@@ -215,23 +223,24 @@ maha_dist <-
   sort(decreasing = T)
 
 head(maha_dist, n = 6L)
-psych::outlier(sub, bad = )
+## Mute nise output, keep plot
+head(psych::outlier(sub), n = 0) 
 
-## check the maha dist of our original name, 
+## Check the maha dist of our original name, 
 .mh_nms <- names(maha_dist)
 tgt_name <- "L. Messi"
 tgt_name2 <- "L. Suarez"
 .idx1 <- which(.mh_nms == tgt_name)
 .idx2 <- which(.mh_nms == tgt_name2)
-paste0(tgt_name, " has the ", .idx1, 
-       "-th highest mahalanobis distance, a value with a value of ", 
+paste0(tgt_name, " has the ", .idx1,
+       "-th highest mahalanobis distance, a value with a value of ",
        round(maha_dist[.idx1], 1), ".")
-paste0(tgt_name2, " has the ", .idx2, 
-       "-th highest mahalanobis distance, a value with a value of ", 
+paste0(tgt_name2, " has the ", .idx2,
+       "-th highest mahalanobis distance, a value with a value of ",
        round(maha_dist[.idx2], 1), ".")
 
 ## Highest distance:
-paste0(.mh_nms[1], " has the  highest mahalanobis distance, a value with a value of ", 
+paste0(.mh_nms[1], " has the highest mahalanobis distance, a value with a value of ",
        round(maha_dist[1], 1), ".")
 tgt_nm <- .mh_nms[1]
 ```
@@ -241,16 +250,18 @@ tgt_nm <- .mh_nms[1]
 The basis_cheem function was based on classification supervised data, make have to add condition handling for the continuous case.
 
 ```{r, eval=FALSE}
-## Apply to the most outlying obs.
+## Find the index of the name with the largest mahalonobis dist.
 .rn <- row.names(sub)
-.idx1 <- which(.mh_rn == tgt_nm1)
+.tgt_idx <- which(.rn == tgt_nm)
+
+has_gk_m
 
 {
   tic("basis_cheem()")
   cheem_bas <- basis_cheem(
     data = dat,
     class = clas,
-    holdout_rownum = .idx1, 
+    holdout_rownum = .tgt_idx, 
     ## Selecting DALEX::predict_parts()
     parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
     parts_B = 10,
