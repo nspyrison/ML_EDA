@@ -1,9 +1,6 @@
 require(ggplot2)
 require(spinifex)
 require(dplyr)
-dat <- scale_sd(mtcars)
-bas <- basis_pca(dat)
-gt_array <- save_history(dat, grand_tour(), max = 3, start = bas)
 
 ggplot_tour <- function(basis_array, data = NULL,
                         angle = .05
@@ -40,8 +37,12 @@ ggplot_tour <- function(basis_array, data = NULL,
   assign(x = ".spinifex_df_data",   value = df_data,   envir = globalenv())
   assign(x = ".spinifex_aes_basis", value = aes_basis, envir = globalenv())
   assign(x = ".spinifex_aes_data",  value = aes_data,  envir = globalenv())
-  ## Also behave as ggpot() with overwritable spinifex theme
-  return(ggplot() + theme_spinifex())
+  ## Also behave as ggpot() with overwritable theme settings
+  ret <- ggplot2::ggplot() +
+    ggplot2::theme_void() +
+    ggplot2::scale_color_brewer(palette = "Dark2") +
+    ggplot2::coord_fixed()
+  return(ret)
 }
 
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
@@ -98,31 +99,29 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
   )
 }
 
-ggproto_data_points <- function(aes_args = list(),
-                                identity_args = list(),
-                                zero_mark = TRUE,
-                                gridline_probs = seq(.25, .75, .25),
-){
-  prep_ggproto_data <- function(zero_mark = TRUE,
-                                gridline_probs = seq(.25, .75, .25)){
-  aes_args <- as.list(aes_args)
-  identity_args <- as.list(identity_args)
+ggproto_data_background <- function(zero_mark = TRUE,
+                                    gridline_probs = seq(0, 1, .25)){
   ## Initialization
-  df_data <- .spinifex_df_data
+  position <- "center" ## Data assumed center.
+  df_data  <- .spinifex_df_data
   df_basis <- .spinifex_df_basis
   n_frames <- length(unique(df_basis$frame))
-  p <- nrow(df_basis)/n_frames
-  manip_var <- attr(.spinifex_df_basis, "manip_var")
+  p <- nrow(df_basis) / n_frames
+  manip_var <- attr(.spinifex_df_basis, "manip_var") ## NULL if not manip var
   
-  ret <- list()
+  ret <- list() ## Init
   ## Setup gridlines
-  if(is.numeric(gridline_probs)){
+  if(is.numeric(gridline_probs) &
+     all(gridline_probs >= 0) &
+     all(gridline_probs <= 1)
+  ){
+    .to <- df_data
     .x_min <- min(.to[, 1L])
     .y_min <- min(.to[, 2L])
     .x_max <- max(.to[, 1L])
     .y_max <- max(.to[, 2L])
-    .x_q <- quantile(.to[, 1L], gridline_probs)
-    .y_q <- quantile(.to[, 2L], gridline_probs)
+    .x_q <- .x_min + gridline_probs * diff(range(.x_min, .x_max))
+    .y_q <- .y_min + gridline_probs * diff(range(.y_min, .y_max))
     .len <- length(gridline_probs)
     .df_gridlines <- data.frame(
       x     = c(rep(.x_min, .len), .x_q),
@@ -133,41 +132,80 @@ ggproto_data_points <- function(aes_args = list(),
     
     gridlines <- ggplot2::geom_segment(
       data = .df_gridlines,
-      color = "grey80", size = .8,
+      color = "grey80", size = .5,
       mapping = ggplot2::aes(x = x, y = y, xend = x_end, yend = y_end)
     )
     ret <- c(ret, gridlines)
   }
-
-  ## Setup sero mark 
+  
+  ## Setup zero mark, 5% on each side.
   if(zero_mark == TRUE){
     .center <- scale_axes(data.frame(x = 0L, y = 0L), position, .to)
     .x_tail <- .05 * diff(range(.x_min, .x_max))
     .y_tail <- .05 * diff(range(.y_min, .y_max))
     .df_zero_mark <-
-      data.frame(x     = c(.center[, 1L] - .center, .center[, 1L]),
-                 x_end = c(.center[, 1L] + .center, .center[, 1L]),
-                 y     = c(.center[, 2L], .center[, 2L] - .center),
-                 y_end = c(.center[, 2L], .center[, 2L] + .center)
+      data.frame(x     = c(.center[, 1L] - .x_tail, .center[, 1L]),
+                 x_end = c(.center[, 1L] + .x_tail, .center[, 1L]),
+                 y     = c(.center[, 2L], .center[, 2L] - .y_tail),
+                 y_end = c(.center[, 2L], .center[, 2L] + .y_tail)
       )
     
     zero_mark <- ggplot2::geom_segment(
       data = .df_zero_mark,
-      color = "grey60", size = 1.2,
+      color = "grey60", size = 1,
       mapping = ggplot2::aes(x = x, y = y, xend = x_end, yend = y_end)
     )
     ret <- c(ret, zero_mark)
   }
-  return()
-  }
-  ## Return ggproto of projection points, zero mark, and gridlines 
   return(ret)
 }
 
+ggproto_data_points <- function(aes_args = list(),
+                                identity_args = list()){
+  ## Assumptions
+  if(is.null(.spinifex_df_data) == TRUE) return() 
+  aes_args <- as.list(aes_args)
+  identity_args <- as.list(identity_args)
+  ## Initialization
+  df_data  <- .spinifex_df_data
+  df_basis <- .spinifex_df_basis
+  
+  ## Add aes_args to df_data, replacating accross frame
+  .tgt_len   <- nrow(df_data)
+  .orig_nms <- names(df_data)
+  .aes_arg_nms <- names(aes_args)
+  .mute <- lapply(aes_args, function(i){
+    .this_col <- rep_len(aes_args[i], .tgt_len)
+    df_data[, ncol(df_data) + 1L] <- .this_col
+  })
+  ## repair names
+  names(df_data) <- c(.orig_nms, .aes_arg_nms)
+  
+  ## do.call aes() over the aes_args 
+  .aes_func <- function(...)
+    ggplot2::aes(x = x, y = y, frame = frame, ...)
+  .aes_call <- do.call(.aes_func, aes_args)
+  ## do.call geom_point() over the identity_args 
+  .point_func <- function(...){
+    suppressWarnings(
+      ggplot2::geom_point(mapping = .aes_call, data = df_data, ...)
+    )
+  }
+  .point_call <- do.call(.point_func, identity_args)
+  ## Return ggproto of projection points
+  return(.point_call)
+}
 
-z <- ggplot_tour(gt_array, dat)
-zz <- ggproto_basis_axes()
 
-z + zz
-gg <- ggplot_tour(gt_array, dat) + ggproto_basis_axes()
+if(F){ ## TESTING
+#' @examples 
+#' dat <- scale_sd(mtcars)
+#' bas <- basis_pca(dat)
+#' gt_array <- save_history(dat, grand_tour(), max = 3, start = bas)
+#' 
+#' ggplot_tour(gt_array, dat) +
+#'   ggproto_basis_axes() +
+#'   ggproto_data_background() +
+#'   ggproto_data_points()
+}
 
