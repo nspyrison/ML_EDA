@@ -1,7 +1,3 @@
-require(ggplot2)
-require(spinifex)
-require(dplyr)
-
 ggplot_tour <- function(basis_array, data = NULL,
                         angle = .05
                         # bind_col_basis = list(label = NULL),
@@ -170,6 +166,7 @@ ggproto_data_points <- function(aes_args = list(),
   df_basis <- .spinifex_df_basis
   n_frames <- length(unique(df_basis$frame))
   n <- nrow(df_data) / n_frames
+  
 
   ## Add aes_args to df_data, replicating across frame
   .tgt_len  <- nrow(df_data)
@@ -252,6 +249,10 @@ ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat)))
 
 
 if(F){ ## TESTING
+  require("ggplot2")
+  require("spinifex")
+  require("dplyr")
+  
 #' @examples 
 #' dat <- scale_sd(mtcars)
 #' bas <- basis_pca(dat)
@@ -261,7 +262,7 @@ if(F){ ## TESTING
 #'   ggproto_basis_axes() +
 #'   ggproto_data_background() +
 #'   ggproto_data_points() + theme(legend.position = "right")
-#'   
+#' 
 #' dat <- scale_sd(tourr::flea[, 1:6])
 #' clas <- flea[, 7]
 #' bas <- basis_pca(dat)
@@ -274,6 +275,85 @@ if(F){ ## TESTING
 #'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
 #'                       identity_args = list(size= 1.5, alpha = .7)) +
 #'   ggproto_data_text()
-  debugonce(ggproto_data_points)
 }
 
+if(F) ?render_gganimate
+#' @examples 
+#' dat <- scale_sd(::flea[, 1:6])
+#' clas <- flea[, 7]
+#' bas <- basis_pca(dat)
+#' mv  <- manip_var_of(bas)
+#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
+#' lab <- as.character(1:nrow(dat))
+#' ggtour <- ggplot_tour(mt_array, dat) +
+#'   ggproto_basis_axes() +
+#'   ggproto_data_background() +
+#'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
+#'                       identity_args = list(size= 1.5, alpha = .7))
+#' 
+#' \dontrun{
+#' animate_gganimate(ggtour)
+#' 
+#' (anim <-
+#'   animate_gganimate(ggtour, fps = 10, rewind = TRUE,
+#'                     start_pause = 1, end_pause = 2))
+#'                            
+#' gganimate::anim_save("my_tour.gif",
+#'                      animation = anim,
+#'                      path = "./figures")
+#' }
+animate_gganimate <- function(
+  ggtour, fps = 8L, rewind = FALSE, start_pause = 0.5, end_pause = 1L,
+  ... ## Passed to gganimate::animate.
+  ){
+  requireNamespace("gganimate")
+  gga <- ggtour + gganimate::transition_states(frame, transition_length = 0L)
+  anim <- gganimate::animate(
+    gga, fps = fps, rewind = rewind, 
+    start_pause = fps * start_pause, 
+    end_pause = fps * end_pause, 
+    ...)
+  return(anim)
+}
+
+if(F) ?render_plotly
+#' @examples 
+#' dat <- scale_sd(::flea[, 1:6])
+#' clas <- flea[, 7]
+#' bas <- basis_pca(dat)
+#' mv  <- manip_var_of(bas)
+#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
+#' lab <- as.character(1:nrow(dat))
+#' ggtour <- ggplot_tour(mt_array, dat) +
+#'   ggproto_basis_axes() +
+#'   ggproto_data_background() +
+#'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
+#'                       identity_args = list(size= 1.5, alpha = .7))
+#' 
+#' \dontrun{
+#' animate_gganimate(ggtour)
+#' 
+#' (anim <-
+#'    animate_plotly(ggtour, fps = 10, rewind = TRUE,
+#'                   start_pause = 1, end_pause = 2))
+#'                            
+#' htmlwidgets::saveWidget(widget = anim, file = "./figures/my_tour.html",
+#'                         selfcontained = TRUE)
+#' }
+animate_plotly <- function(
+  ggtour, fps = 8L, ##tooltip = "none",
+  ... ## Passed to plotly::layout.
+){
+  requireNamespace("plotly")
+  ggp <- plotly::ggplotly(p = ggtour, tooltip = tooltip)
+  ggp <- plotly::animation_opts(p = ggp, frame = 1L/fps * 1000L,
+                                transition = 0L, redraw = FALSE)
+  ggp <- plotly::layout(
+    ggp, 
+    showlegend = FALSE, 
+    yaxis = list(showgrid = FALSE, showline = FALSE),
+    xaxis = list(scaleanchor = "y", scalaratio = 1L, showgrid = FALSE, showline = FALSE),
+    ...
+  )
+  return(ggp)
+}
