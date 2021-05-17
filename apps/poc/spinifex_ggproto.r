@@ -170,7 +170,7 @@ ggproto_data_points <- function(aes_args = list(),
   df_basis <- .spinifex_df_basis
   n_frames <- length(unique(df_basis$frame))
   n <- nrow(df_data) / n_frames
-  
+
   ## Add aes_args to df_data, replicating across frame
   .tgt_len  <- nrow(df_data)
   .orig_nms <- names(df_data)
@@ -214,6 +214,8 @@ ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat)))
   ## Initialization
   df_data  <- .spinifex_df_data
   df_basis <- .spinifex_df_basis
+  n_frames <- length(unique(df_basis$frame))
+  n <- nrow(df_data) / n_frames
   
   ## Add aes_args to df_data, replicating across frame
   .tgt_len   <- nrow(df_data)
