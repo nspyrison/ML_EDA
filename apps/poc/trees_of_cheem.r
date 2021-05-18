@@ -30,7 +30,7 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 #' dat <- spinifex::scale_sd(flea[, 1:6])
 #' clas <- flea$species
 #' tgt_obs <- 10 ## row number in 1:nrow(dat)
-#' tgt_var <- clas == clas[tgt_obs] ## Or regression on a different continuous var.
+#' tgt_var <- clas == clas[tgt_obs] ## Or regression on a continuous var not in data.
 #' 
 #' basis_cheem(dat, tgt_obs, tgt_var, clas, basis_type = "olda")
 #' 
@@ -42,7 +42,7 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 #' #### Find a outlier to look at
 #' .maha <- mahalanobis(dat, colMeans(dat), cov(dat))
 #' .maha <- sort(.maha, decreasing = T)
-#' head(.maha, n = 6L) ## "I. Pettersson", 4th largest mahalonobis dist, google: Sweddish goalkepper
+#' head(.maha, n = 6L) ## "I. Pettersson", 4th largest mahalonobis dist, google: a Sweddish goalkepper
 #' .tgt_name <- "I. Pettersson"
 #' tgt_row <- which(row.names(dat) == .tgt_name)
 #' 
@@ -57,80 +57,89 @@ basis_cheem <- function(data, holdout_rownum, target_var, class = NULL,
   ## Assumptions
   requireNamespace("randomForest")
   requireNamespace("DALEX")
-  requireNamespace("treeshap") ## Not explicitly used, maybe implicitly called in DALEX?
+  #requireNamespace("treeshap") ## Not explicitly used, maybe implicitly called in DALEX?
   data <- as.data.frame(data)
   ## Initialize held out observation for data, target var, optional class var
-  oos_dat <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-  data <- data[-holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-  oos_target_var <- target_var[holdout_rownum]
-  target_var <- target_var[-holdout_rownum]
+  data_oos  <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
+  data_else <- data[-holdout_rownum, ]
+  target_var_oos   <- target_var[holdout_rownum]
+  target_var_else <- target_var[-holdout_rownum]
   ## If class is used
   if(is.null(class) == FALSE){
-    class <-  as.factor(class)
-    oos_clas <- class[holdout_rownum]
-    class <- class[-holdout_rownum]
+    class <- as.factor(class)
+    class_oos   <- class[holdout_rownum]
+    class_else <- class[-holdout_rownum]
   }else{
-    ## If class is null, enforce correct basis fucntions
+    ## If class is null, enforce correct basis functions
     basis_type <- match.arg(basis_type)
-    if(basis_type %in% c("olda", "odp")) stop(paste0("basis_type ", basis_type, " requires the 'class' argument."))
+    if(basis_type %in% c("olda", "odp"))
+      stop(paste0("basis_type ", basis_type, " requires the 'class' argument."))
   }
   
+  #### Random forest, with holdout_rownum removed
   .p <- ncol(dat)
   ## Discrete wants mtry = sqrt(p), continuous wants mtry = p/3
-  .RF_mtry <- ifelse(is.discrete(target_var), sqrt(.p), .p / 3)
-  .rf <- randomForest::randomForest(target_var~.,
-                                    data = data.frame(target_var, data),
+  .RF_mtry <- ifelse(is.discrete(target_var_else), sqrt(.p), .p / 3L)
+  .rf <- randomForest::randomForest(target_var_else~.,
+                                    data = data.frame(target_var_else, data_else),
                                     mtry = .RF_mtry)
   
+  #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
   parts_type <- match.arg(parts_type)
   .ex_rf <- DALEX::explain(model = .rf,
-                           data = data,
-                           y = target_var,
-                           label = "Random Forest")
+                           data = data_else,
+                           y = target_var_else,
+                           label = paste0(parts_type, " local attribution of random forest model"))
   .parts <- DALEX::predict_parts(explainer = .ex_rf, ## ~ 10 s @ B=25
-                                 new_observation = oos_dat,
+                                 new_observation = data_oos,
                                  type = parts_type,
                                  N = parts_N,
                                  B = parts_B,
                                  ...)
   
-  .scree_la <- df_scree_local_attr(.parts) ## 1 shap for each class :/...
-  ## TODO: Does aggregating across class make sense? do we need to generalize to multi class.
+  #### The local attribution of those parts, to be use as first dim of projection
+  .scree_la <- df_scree_local_attr(.parts)
+  ## Keep in mind that there are class # of level shap values if you don't test against specific class level
+  ## Reorder scree table back to original data colname order
+  .row_idx <- order(match(.scree_la$variable_name, colnames(data)))
+  .scree_la <- .scree_la[.row_idx, ]
   
+  #### Basis of a global feature (holdout_rownum removed), to use as second dim of projection
   basis_type <- match.arg(basis_type)
   .bas <- switch(basis_type,
-                 pca  = basis_pca(data),
-                 olda = basis_olda(data, class),
-                 odp  = basis_odp(data, class),
-                 onpp = basis_onpp(data), ## Using default hyperparam
+                 pca  = basis_pca(data_else),
+                 olda = basis_olda(data_else, class_else),
+                 odp  = basis_odp(data_else, class_else),
+                 onpp = basis_onpp(data_else), ## Using default hyperparameters
                  stop("basis_type expects 'pca', 'olda', 'odp' or 'onpp'.")
   )
   
-  ## reorder scree table back to data colname order
-  .row_idx <- order(match(.scree_la$variable_name, rownames(.bas)))
-  .scree_la <- .scree_la[.row_idx,]
-  
-  .cbind <- cbind(.scree_la$median_local_attr, .bas)[, 1L:2L]
-  .cheem_bas <- as.matrix(tourr::orthonormalise(.cbind))
-  colnames(.cheem_bas) <- .cn <- c(parts_type, paste0(basis_type, "1"))
+  #### Bring them together and orthonormalize
+  .cheem_bas <- cbind(.scree_la$median_local_attr, .bas)[, 1L:2L]
+  .cheem_bas <- as.matrix(tourr::orthonormalise(.cheem_bas))
+  colnames(.cheem_bas) <- c(parts_type, paste0(basis_type, "1"))
   
   attr(.cheem_bas, "class") <- c("cheem_basis", "matrix")
-  attr(.cheem_bas, "data") <- as.matrix(data)
-  attr(.cheem_bas, "data_class") <- class ## Can't call it "class" b/c matrix/df.
-  attr(.cheem_bas, "new_observation") <- as.matrix(new_observation)
-  attr(.cheem_bas, "new_observation_class") <- new_observation_class
+  attr(.cheem_bas, "data_else") <- as.matrix(data_else)
+  attr(.cheem_bas, "data_oos")  <- as.matrix(data_oos)
+  attr(.cheem_bas, "class_else") <- class_else ## Can't call it "class" b/c matrix/df.
+  attr(.cheem_bas, "class_oos")  <- class_oos
+  attr(.cheem_bas, "randomForest")  <- .rf
+  attr(.cheem_bas, "explain")       <- .ex_rf
   attr(.cheem_bas, "predict_parts") <- .parts
   
   return(.cheem_bas)
 }
 
-## Print cheem_bases without the attributes attached.
-print.cheem_basis <- function (x, ...) 
+## Print cheem_bases as a numeric matrix without showing all the attributes.
+print.cheem_basis <- function (x, ...)
 {
-  attr(x, "data") <- NULL
-  attr(x, "data_class") <- NULL
-  attr(x, "new_observation") <- NULL
-  attr(x, "new_observation_class") <- NULL
+  attr(x, "data_else") <- NULL
+  attr(x, "data_oos")  <- NULL
+  attr(x, "class_else") <- NULL
+  attr(x, "class_oos")  <- NULL
+  attr(x, "randomForest")  <- NULL
+  attr(x, "explain")       <- NULL
   attr(x, "predict_parts") <- NULL
   NextMethod()
 }
@@ -138,38 +147,47 @@ print.cheem_basis <- function (x, ...)
 
 
 #' @example
-#' scaled_full <- spinifex::scale_sd(flea[, 1:6])
-#' dat <- scaled_full[-10, 1:6]
-#' oos_obs <- scaled_full[10,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-#' clas <- flea$species[-10]
-#' oos_clas <- flea$species[10]
-#' bas_cheem <- basis_cheem(dat, clas, oos_obs, oos_clas)
+#' dat <- spinifex::scale_sd(flea[, 1:6])
+#' clas <- flea$species
+#' tgt_obs <- 10 ## row number in 1:nrow(dat)
+#' tgt_var <- clas == clas[tgt_obs] ## Or regression on a continuous var not in data.
 #' 
-#' view_cheem(bas_cheem)
+#' bas_cheem <- basis_cheem(dat, tgt_obs, tgt_var, clas, basis_type = "olda")
+#' 
+#' (ggcheem_proj <-
+#'   view_cheem(bas_cheem))
 #' 
 #' view_cheem(bas_cheem, show_boxplots = FALSE, max_features = 4)
 #' 
 #' if(F)
-#'   ggsave("PoC_view_cheem.pdf", device ="pdf", width = 6, height = 3, units="in")
-view_cheem <- function(cheem_basis, show_parts = TRUE, ...){
-  .data <- attributes(cheem_basis)$data
-  .class <- attributes(cheem_basis)$data_class
-  .new_obs <- attributes(cheem_basis)$new_observation
-  .new_obs_class <- attributes(cheem_basis)$new_observation_class
+#'   ggsave("PoC_view_cheem.pdf", ggcheem_proj, device ="pdf", width = 6, height = 3, units="in")
+view_cheem <- function(cheem_basis, show_parts = TRUE,
+                       oos_identity_args = list(color = "red", size = 5, shape = 8),
+                       ...){ ## Passed to plot.pridict_parts()
+  .data_else <- attributes(cheem_basis)$data_else
+  .data_oos  <- attributes(cheem_basis)$data_oos
+  .class_else <- attributes(cheem_basis)$class_else
+  .class_oos  <- attributes(cheem_basis)$class_oos
   .cn <- colnames(cheem_basis)
   
-  .proj_new_obs <- data.frame(.new_obs %*% cheem_basis)
+  ## oos projection not done in view_frames
+  .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
   
-  gg <- view_frame(cheem_basis, data = .data,
-                   aes_args = list(color = .class, shape = .class),
+  .oos_pt_func <- function(...){
+    geom_point(aes_string(x = .cn[1L], y = .cn[2L]),
+             .proj_new_obs, ...)
+  }
+  .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
+  
+  gg <- view_frame(cheem_basis, data = .data_else,
+                   aes_args = list(color = .class_else, shape = .class_else),
                    axes = "left") +
-    theme(legend.position = "off", 
+    theme(legend.position = "off",
           axis.title = element_text()) +
-    labs(x = paste0(.cn[1L], ", normalized local attr"),
-         y = .cn[2L]) + 
-    geom_point(aes_string(x = .cn[1L], y = .cn[2L]), 
-               .proj_new_obs, color = "red", size = 5L, shape = 8L)
-    
+    labs(x = .cn[1L],
+         y = .cn[2L]) +
+    .oos_pt_call
+  
   if(show_parts == TRUE){
     require("patchwork")
     .parts <- attributes(cheem_basis)$predict_parts
@@ -177,7 +195,6 @@ view_cheem <- function(cheem_basis, show_parts = TRUE, ...){
   }
   return(gg)
 }
-
 
 
 ### EMA paper examples, recreating source ----
