@@ -74,7 +74,7 @@ sub <- sub %>%
 ## Normalize each column by its standard deviations
 sub <- spinifex::scale_sd(sub) %>% data.matrix()
 
-## intrisic data dimensionality concerns; even the column names are grouped measures.
+## intrinsic data dimensionality concerns; even the column names are grouped measures.
 colnames(sub)
 ```
 
@@ -161,8 +161,7 @@ spinifex::play_tour_path(
   render_type = render_plotly, ## or render_gganimate for a .gif
   identity_args = list(alpha = .1),
   ggproto = list(theme_spinifex(),
-                 ggtitle("Grand tour, 10 rand bases, interp w/ angle = .2")
-  )
+                 ggtitle("Grand tour, 10 rand bases, interp w/ angle = .2"))
 )
 toc()
 ```

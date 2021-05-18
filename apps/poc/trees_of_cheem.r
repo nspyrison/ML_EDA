@@ -4,6 +4,9 @@ require("spinifex")
 require("tourr")
 require("ggplot2")
 
+is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
+  is.factor(x) || is.character(x) || is.logical(x)
+
 ## Remade from: iBreakDown:::print.break_down_uncertainty
 ## Create the scree df for the local attribution from a DALEX::predict_parts return.
 ## !!may have overlap with iBreakDown:::plot.break_down_uncertainty.
@@ -23,38 +26,69 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 }
 
 #' @example
-#' scaled_full <- spinifex::scale_sd(flea[, 1:6])
-#' dat <- scaled_full[-10, 1:6]
-#' oos_obs <- scaled_full[10,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-#' clas <- flea$species[-10]
-#' oos_clas <- flea$species[10]
+#' ## Discrete supervised classification
+#' dat <- spinifex::scale_sd(flea[, 1:6])
+#' clas <- flea$species
+#' tgt_obs <- 10 ## row number in 1:nrow(dat)
+#' tgt_var <- clas == clas[tgt_obs] ## Or regression on a different continuous var.
 #' 
-#' basis_cheem(dat, clas, oos_obs, oos_clas)
+#' basis_cheem(dat, tgt_obs, tgt_var, clas, basis_type = "olda")
 #' 
-#' basis_cheem(dat, clas, oos_obs, oos_clas,
-#'             parts_type = "break_down", parts_B = 15, parts_N = 100, basis_type = "pca")
-basis_cheem <- function(data, class, holdout_rownum,
-                        parts_type = "shap", parts_B = 10, parts_N = NULL, basis_type = "olda", ...){
+#' ## Continuous regression, no class aesthetics
+#' dat <- dplyr::select(DALEX::fifa, -c("nationality", "potential", "value_eur", "wage_eur"))
+#' dat <- scale_sd(dat)
+#' y_var <- DALEX::fifa$overall ## An aggregate skill measure between 1 and 100.
+#' 
+#' #### Find a outlier to look at
+#' .maha <- mahalanobis(dat, colMeans(dat), cov(dat))
+#' .maha <- sort(.maha, decreasing = T)
+#' head(.maha, n = 6L) ## "I. Pettersson", 4th largest mahalonobis dist, google: Sweddish goalkepper
+#' .tgt_name <- "I. Pettersson"
+#' tgt_row <- which(row.names(dat) == .tgt_name)
+#' 
+#' basis_cheem(data = dat, holdout_rownum = tgt_row,target_var = y_var,
+#'             parts_type = "shap", basis_type = "pca")
+## Previously hard coded classification target var was: class == new_observation_class
+basis_cheem <- function(data, holdout_rownum, target_var, class = NULL,
+                        parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
+                        parts_B = 10,
+                        parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
+                        basis_type = c("pca", "olda", "odp", "onpp"), ...){
   ## Assumptions
   requireNamespace("randomForest")
   requireNamespace("DALEX")
+  requireNamespace("treeshap") ## Not explicitly used, maybe implicitly called in DALEX?
   data <- as.data.frame(data)
-  class <-  as.factor(class)
-  ## Remove holdout obs
+  ## Initialize held out observation for data, target var, optional class var
   oos_dat <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-  oos_clas <- class[holdout_rownum]
-  ## Remaining data 
-  data <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-  class <- class[holdout_rownum]
+  data <- data[-holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
+  oos_target_var <- target_var[holdout_rownum]
+  target_var <- target_var[-holdout_rownum]
+  ## If class is used
+  if(is.null(class) == FALSE){
+    class <-  as.factor(class)
+    oos_clas <- class[holdout_rownum]
+    class <- class[-holdout_rownum]
+  }else{
+    ## If class is null, enforce correct basis fucntions
+    basis_type <- match.arg(basis_type)
+    if(basis_type %in% c("olda", "odp")) stop(paste0("basis_type ", basis_type, " requires the 'class' argument."))
+  }
   
-  .clas_test <- class == new_observation_class
-  .rf <- randomForest::randomForest(.clas_test~., data = data.frame(data, .clas_test))
+  .p <- ncol(dat)
+  ## Discrete wants mtry = sqrt(p), continuous wants mtry = p/3
+  .RF_mtry <- ifelse(is.discrete(target_var), sqrt(.p), .p / 3)
+  .rf <- randomForest::randomForest(target_var~.,
+                                    data = data.frame(target_var, data),
+                                    mtry = .RF_mtry)
+  
+  parts_type <- match.arg(parts_type)
   .ex_rf <- DALEX::explain(model = .rf,
                            data = data,
-                           y = .clas_test,
+                           y = target_var,
                            label = "Random Forest")
   .parts <- DALEX::predict_parts(explainer = .ex_rf, ## ~ 10 s @ B=25
-                                 new_observation = new_observation,
+                                 new_observation = oos_dat,
                                  type = parts_type,
                                  N = parts_N,
                                  B = parts_B,
@@ -63,12 +97,13 @@ basis_cheem <- function(data, class, holdout_rownum,
   .scree_la <- df_scree_local_attr(.parts) ## 1 shap for each class :/...
   ## TODO: Does aggregating across class make sense? do we need to generalize to multi class.
   
+  basis_type <- match.arg(basis_type)
   .bas <- switch(basis_type,
-                 olda = basis_olda(data, class),
                  pca  = basis_pca(data),
+                 olda = basis_olda(data, class),
                  odp  = basis_odp(data, class),
-                 onpp = basis_onpp(data), ## Hardcoded defaults
-                 stop("basis_type expects 'olda', 'pca', 'odp' or 'onpp'.")
+                 onpp = basis_onpp(data), ## Using default hyperparam
+                 stop("basis_type expects 'pca', 'olda', 'odp' or 'onpp'.")
   )
   
   ## reorder scree table back to data colname order

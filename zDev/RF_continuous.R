@@ -13,12 +13,18 @@ if(F){##examples
   iris.rf <- randomForest(Species ~ ., data=iris, importance=TRUE,
                           proximity=TRUE)
   print(iris.rf)
+  
+  ## The `unsupervised' case:
+  set.seed(17)
+  iris.urf <- randomForest(iris[, -5])
+  MDSplot(iris.urf, iris$Species)
 
   ## Regression: (continuous), wants mtry = p/3
   ## data(airquality)
   set.seed(131)
-  ozone.rf <- randomForest(Ozone ~ ., data=airquality, mtry=3,
+  ozone.rf <- randomForest(Ozone ~ ., data=airquality, mtry=3.1,
                            importance=TRUE, na.action=na.omit)
+  
   print(ozone.rf)
 }
 
