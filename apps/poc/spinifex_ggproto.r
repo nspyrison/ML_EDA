@@ -39,6 +39,7 @@ ggplot_tour <- function(basis_array, data = NULL,
   attr(ret, "class") <- c("ggtour", class(ret))
   return(ret)
 }
+## Print method
 print.ggtour <- function (x, ...){
   x +
     ggproto_basis_axes() +
@@ -192,11 +193,11 @@ ggproto_data_points <- function(aes_args = list(),
   ## repair names
   names(df_data) <- c(.orig_nms, .aes_arg_nms)
   
-  ## do.call aes() over the aes_args 
+  ## do.call aes() over the aes_args
   .aes_func <- function(...)
     ggplot2::aes(x = x, y = y, frame = frame, ...)
   .aes_call <- do.call(.aes_func, aes_args)
-  ## do.call geom_point() over the identity_args 
+  ## do.call geom_point() over the identity_args
   .geom_func <- function(...){
     suppressWarnings(
       ggplot2::geom_point(mapping = .aes_call, data = df_data, ...)
