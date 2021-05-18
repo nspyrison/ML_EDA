@@ -70,22 +70,35 @@ basis_cheem <- function(data, class, holdout_rownum,
   )
   
   ## reorder scree table back to data colname order
-  .r_idx <- order(match(.scree_la$variable_name, rownames(.bas)))
-  .scree_la <- .scree_la[.r_idx,]
+  .row_idx <- order(match(.scree_la$variable_name, rownames(.bas)))
+  .scree_la <- .scree_la[.row_idx,]
   
   .cbind <- cbind(.scree_la$median_local_attr, .bas)[, 1L:2L]
   .cheem_bas <- as.matrix(tourr::orthonormalise(.cbind))
   colnames(.cheem_bas) <- .cn <- c(parts_type, paste0(basis_type, "1"))
   
-  #attr(.cheem_bas, "class") <- c("matrix", "cheem basis")
+  attr(.cheem_bas, "class") <- c("cheem_basis", "matrix")
   attr(.cheem_bas, "data") <- as.matrix(data)
-  attr(.cheem_bas, "data_class") <- class
+  attr(.cheem_bas, "data_class") <- class ## Can't call it "class" b/c matrix/df.
   attr(.cheem_bas, "new_observation") <- as.matrix(new_observation)
   attr(.cheem_bas, "new_observation_class") <- new_observation_class
   attr(.cheem_bas, "predict_parts") <- .parts
   
   return(.cheem_bas)
 }
+
+## Print cheem_bases without the attributes attached.
+print.cheem_basis <- function (x, ...) 
+{
+  attr(x, "data") <- NULL
+  attr(x, "data_class") <- NULL
+  attr(x, "new_observation") <- NULL
+  attr(x, "new_observation_class") <- NULL
+  attr(x, "predict_parts") <- NULL
+  NextMethod()
+}
+
+
 
 #' @example
 #' scaled_full <- spinifex::scale_sd(flea[, 1:6])

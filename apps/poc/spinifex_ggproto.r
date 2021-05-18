@@ -1,7 +1,6 @@
 ggplot_tour <- function(basis_array, data = NULL,
-                        angle = .05
-                        # bind_col_basis = list(label = NULL),
-                        # mapping_data = aes(x, y, color = color) ## can these be simplifid? really we want to know what else to use.
+                        angle = .05 ## Not applicable for manual tour.
+                        ## Class/classification for method default values?
 ){
   if(is.null(data) == TRUE)
     data <- attr(basis_array, "data") ## Also could be NULL.
@@ -36,7 +35,15 @@ ggplot_tour <- function(basis_array, data = NULL,
                    legend.direction = "horizontal", ## With-in aesthetic
                    legend.box = "vertical",         ## Between aesthetic
                    legend.margin = margin())        ## Try to minimize margin.
+  
+  attr(ret, "class") <- c("ggtour", class(ret))
   return(ret)
+}
+print.ggtour <- function (x, ...){
+  x +
+    ggproto_basis_axes() +
+    ggproto_data_background(gridline_probs = FALSE) +
+    ggproto_data_points()
 }
 
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
@@ -167,7 +174,6 @@ ggproto_data_points <- function(aes_args = list(),
   n_frames <- length(unique(df_basis$frame))
   n <- nrow(df_data) / n_frames
   
-
   ## Add aes_args to df_data, replicating across frame
   .tgt_len  <- nrow(df_data)
   .orig_nms <- names(df_data)
