@@ -46,9 +46,6 @@ require("tictoc")
 if(require("treeshap") == FALSE)
   devtools::install_github('ModelOriented/treeshap')
 require("treeshap")
-if(require("lineprof") == FALSE)
-  devtools::install_github('hadley/lineprof')
-require("lineprof")
 ## Local functions, esp. for basis_cheem() and view_cheem()
 source("./apps/poc/trees_of_cheem.r")
 if(F) ## Manualy run to view file:
@@ -64,18 +61,15 @@ Because of the column names having grouped naming, see the the first suffix of t
 ```{R}
 raw <- DALEX::fifa
 str(raw)
-
-## Remove some columns
+## Remove factor, target variable `overall`, and highly correlated var, `potential`
 require("dplyr")
-sub <- raw
-sub <- sub %>%
-  select(-c(`nationality`, `potential`, `value_eur`, `wage_eur`))
-
+dat <- raw %>% dplyr::select(-c(`nationality`, `potential`, `overall`))
 ## Normalize each column by its standard deviations
-sub <- spinifex::scale_sd(sub) %>% data.matrix()
+dat <- spinifex::scale_sd(dat) %>% data.matrix()
+tgt_var <- raw$overall
 
 ## intrinsic data dimensionality concerns; even the column names are grouped measures.
-colnames(sub)
+colnames(dat)
 ```
 
 ## Intrinsic Dimension Estimation
@@ -88,13 +82,13 @@ Thoughts: Goalkeeping clearly bloated and unique, first 15 or so dim also seem r
 #### 1) Correlation
 require("corrplot")
 tic("correlation")
-cor_mat <- cor(sub)
+cor_mat <- cor(dat)
 corrplot(cor_mat,
          method = "circle", ## geom
          type = "upper", ## only upper triangle
          diag = F, ## remove auto correlation
          order = "AOE", ## Angle of eigenvectors
-         tl.col="black", tl.srt=90, ## Text label color and rotation
+         tl.col = "black", tl.srt = 90, ## Text label color and rotation
          tl.pos = "td")
 toc()
 ```
@@ -110,7 +104,7 @@ if(F)
   file.edit("./apps/poc/ggproto_screeplot_pca.r")
 
 tic("PCA & scree")
-pca_obj <- prcomp(sub)
+pca_obj <- prcomp(dat)
 palette(RColorBrewer::brewer.pal(8, "Dark2"))
 ggplot2::ggplot() + ggproto_screeplot_pca(pca_obj) + ggtitle("PCA screeplot, fifa data")
 toc()
@@ -122,9 +116,9 @@ Alright, not too shabby. For more empirical methods one might select 12 to 16 di
 
 ```{r}
 tic("Rdimtools IDE (only the faster tests).")
-ide_vect(data = sub, inc_slow = FALSE)
+ide_vect(data = dat, inc_slow = FALSE)
 toc()
-dat <- pca_obj$x[, 1:6]
+dat_pca <- pca_obj$x[, 1:6]
 ```
 
 
@@ -133,18 +127,20 @@ dat <- pca_obj$x[, 1:6]
 gist:
 "We approximate our 42-dim data in just 6 PC, ignore the rest and only look at discrete orthogonal pairs of these first 6 PC."
 
-
 ```{r}
 tic("ggpairs, first 6 PC")
-GGally::ggpairs(as.data.frame(dat))
+GGally::ggpairs(as.data.frame(dat_pca))
 toc()
 ```
 
 ## Data visualization _tours_
 
-Why are we only looking at discrete orthogonal pairs though. Instead of having a 6D cube and only looking at squarely at the sides, lets have a continuus view of the intermediate frames as well; tours.
+Why are we only looking at discrete orthogonal pairs though. Instead of having a 6D cube and only looking at squarely at the sides, lets have a continuous view of the intermediate frames as well; tours.
 
 Tours are animation of linear projections over (near-)continuous changes to the projection basis. There are different types/flavors of tours which are distinguished by their basis paths.
+
+We could tour on the full $p$ space, or a PCA subset. Because we are interested in exploring the local attribution of models, we'll err on the side of using the full variable space.
+
 
 ### Grand Tour, random bases
 
@@ -155,13 +151,13 @@ t_array <- tourr::save_history(data = dat, max_bases = 10, ## Number of random b
 
 tic("render grand tour animimation")
 spinifex::play_tour_path(
-  t_array, 
+  t_array,
   angle = .2, ## Distance interpolated in radians
   axes = "left",
   render_type = render_plotly, ## or render_gganimate for a .gif
   identity_args = list(alpha = .1),
   ggproto = list(theme_spinifex(),
-                 ggtitle("Grand tour, 10 rand bases, interp w/ angle = .2"))
+                 ggtitle("Grand tour, 10 random bases, interp w/ angle = .2"))
 )
 toc()
 ```
@@ -174,16 +170,16 @@ bas_cmass <- spinifex::basis_guided(dat, tourr::cmass())
 toc()
 tic("find holes")
 t_array <- tourr::save_history(data = dat,
-                               tour_path = guided_tour(holes()), 
+                               tour_path = guided_tour(holes()),
                                start = bas_cmass)
 toc()
 
 tic("render guided tour")
 spinifex::play_tour_path(
   t_array, 
-  angle = .05, ## distance interpolated in radians
+  angle = .05, ## Distance interpolated in radians
   axes = "left",
-  render_type = render_plotly, ## or render_gganimate for a .gif
+  render_type = render_plotly, ## As .html widget, or `render_gganimate` for a .gif
   identity_args = list(alpha = .1),
   ggproto = list(theme_spinifex(),
                  ggtitle("Guided tour, simulated annealing from cmass() to holes()")
@@ -195,17 +191,18 @@ toc()
 
 ### Manual Tour, manipulate selected variable
 ```{r}
-bas <- spinifex::basis_half_circle(dat)
+bas <- spinifex::basis_pca(dat)
+mv <- manip_var_of(bas)
 
 tic("render manual tour")
 spinifex::play_manual_tour(
-  bas, dat, manip_var = 4,
+  bas, dat, manip_var = mv,
   angle = .1, ## distance interpolated in radians
   axes = "left",
   render_type = render_plotly, ## or render_gganimate for a .gif
   identity_args = list(alpha = .1),
   ggproto = list(theme_spinifex(),
-                 ggtitle("manual tour, PCA is sensitive to the cluster, explore orthogonally")
+                 ggtitle("manual tour")
   )
 )
 toc()
@@ -218,14 +215,13 @@ It has been some years before I regularly worked with people that follow soccer 
 
 ```{r}
 maha_dist <-
-  mahalanobis(sub, colMeans(sub), cov(sub)) %>%
-  sort(decreasing = T)
+  mahalanobis(dat, colMeans(dat), cov(dat)) %>%
+  sort(decreasing = TRUE)
 
-head(maha_dist, n = 6L)
-## Mute nise output, keep plot
-head(psych::outlier(sub), n = 0) 
+head(maha_dist, n = 6)
+head(psych::outlier(dat), n = 0) ## Mute noise output but, keep plot
 
-## Check the maha dist of our original name, 
+## Check the maha dist of our original name
 .mh_nms <- names(maha_dist)
 tgt_name <- "L. Messi"
 tgt_name2 <- "L. Suarez"
@@ -248,69 +244,55 @@ tgt_nm <- .mh_nms[1]
 
 The basis_cheem function was based on classification supervised data, make have to add condition handling for the continuous case.
 
-```{r, eval=FALSE}
+```{r}
 ## Find the index of the name with the largest mahalonobis dist.
-.rn <- row.names(sub)
+.rn <- row.names(dat)
 .tgt_idx <- which(.rn == tgt_nm)
-
-has_gk_m
-
-{
-  tic("basis_cheem()")
-  cheem_bas <- basis_cheem(
-    data = dat,
-    class = clas,
-    holdout_rownum = .tgt_idx, 
-    ## Selecting DALEX::predict_parts()
-    parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
-    parts_B = 10,
-    parts_N = NULL,
-    ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
-    basis_type = "pca")
-  toc()
-  ## 1) raw: 127 sec, 
-  ## 2) top 25% nationalities,(80% obs) 88sec, 
-  ## 3) predicting `overall`, 
-}
+.tgt_nm <- .rn[.tgt_idx]
+  
+tic("basis_cheem()")
+bas_cheem <- basis_cheem(
+  data = dat,
+  holdout_rownum = .tgt_idx,
+  target_var = tgt_var,
+  ## Selecting DALEX::predict_parts()
+  parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
+  ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
+  basis_type = "pca")
+toc()
+#### Classification on nationality
+## 1) raw: 127 sec,
+## 2) top 25% nationalities,(80% of obs) 88sec,
+#### Regression on continuous `overall` aggregate score
+## 3) predicting `overall`
 ```
 
 ## View the starting basis
 
-```{r, eval=FALSE}
-##TODO: another error;
-# Error in `[.data.frame`(df, setdiff(names(df), names(transformed))) : 
-#   undefined columns selected
-# In addition: Warning message:
-# Duplicated aesthetics after name standardisation: 
-### IIRC this is is the same issue that came up when trying to abstract spinifex functions...
-# debugonce(view_cheem)
-# debugonce(view_frame)
-paste0("view_cheem: ", tgt_name)
-view_cheem(cheem_basis = cheem_bas,
+```{r}
+paste0("View 1 cheem basis for ", .tgt_nm)
+view_cheem(cheem_basis = bas_cheem,
            show_parts = TRUE)
-## ... passes to DALEX::plot.predict_parts()
 ```
 
 ## Cheem tour
 
-### Short cheem tour, 4 target bases
+### Short cheem tour
 
-```{r, eval=FALSE}
-if(interactive())
-  ?spinifex::play_tour_path()
-## tour_path wants an array of target bases to tourr::interpolate() between.
+Still thinking about how to best do structure the functions, but something to this effect.
 
+```{r}
 ## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
-.bas_types <- c('pca', 'odp', 'onpp') ## 'olda'
-tgt_bases <- array(NA, dim = c(dim(cheem_bas), length(.bas_types))) ## init
+.bas_types <- c('pca', 'onpp') ## 'olda' and 'odp' need class
+tgt_bases <- array(NA, dim = c(dim(bas_cheem), length(.bas_types))) ## init
 .mute <- sapply(seq_along(.bas_types), function(i){
   tgt_bases[,, i] <<-
-    basis_cheem(dat, clas, oos_obs, oos_clas,
-                ## X axis is always this SHAPely values
+    basis_cheem(data = dat,
+                holdout_rownum = .tgt_idx,
+                target_var = tgt_var,
+                ## X axis is always SHAPely values
                 parts_type = "shap",
-                parts_B = 10,
-                parts_N = NULL,
-                ## Vary across components on Y axis, expects 'olda', 'pca', 'odp' or 'onpp'
+                ## Vary across components on Y axis, expects 'pca', 'onpp'
                 basis_type = .bas_types[i])
 })
 ## Format for tourr::interpolate() 
@@ -318,10 +300,10 @@ tgt_bases <- as_history_array(tgt_bases, dat)
 
 ## Aesthetic init
 .colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
-.col <- .colorPal[as.integer(clas)]
+.col <- .colorPal[1]
 .col[holdout_obs] <- "red"
 .shp <- as.integer(clas)
-.shp[holdout_obs] <- 4 ## shape 8 is *
+.shp[holdout_obs] <- 4 ## shape 8 is *, but don't translate to plotly well?
 .alp <- rep(0.4, nrow(dat))
 .alp[holdout_obs] <- .7
 .siz <- rep(1.5, nrow(dat))
@@ -329,7 +311,7 @@ tgt_bases <- as_history_array(tgt_bases, dat)
 
 ## Tour animation
 spinifex::play_tour_path(
-  tour_path = tgt_bases, 
+  tour_path = tgt_bases,
   data = dat,
   ## position of the basis unit circle
   ## expects:  "center", "left", "right", "bottomleft", "topright", or "off"
@@ -344,10 +326,9 @@ spinifex::play_tour_path(
   ## list of items to "add" to a ggplot() + X
   ggproto = list(spinifex::theme_spinifex()),
   ## expects render_gganimate (.gif) or render_plotly (.html widget)
-  render_type = render_plotly,
-  tooltip = c("id") ## only adds tool tips on axes segmetns not projection points.
+  render_type = render_plotly
 )
 ## For saving, store output of spinifex::play_tour_path()
 # ?gganimate::anim_save() ## with render_gganimate
-# ?htmlwidgets::saveWidget() ## with render_gganimate
+# ?htmlwidgets::saveWidget() ## with render_plotly
 ```
