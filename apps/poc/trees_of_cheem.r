@@ -65,6 +65,7 @@ basis_cheem <- function(data, holdout_rownum, target_var, class = NULL,
   target_var_oos   <- target_var[holdout_rownum]
   target_var_else <- target_var[-holdout_rownum]
   ## If class is used
+  class_oos <- class_else <- NULL ## Initialize
   if(is.null(class) == FALSE){
     class <- as.factor(class)
     class_oos   <- class[holdout_rownum]

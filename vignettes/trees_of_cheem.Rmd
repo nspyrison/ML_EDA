@@ -15,9 +15,9 @@ output: html_document
 https://github.com/njtierney/naniar/blob/master/vignettes/getting-started-w-naniar.Rmd -->
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
-  echo       = TRUE,   # code
-  include    = TRUE,   # plots
-  eval       = TRUE,   # chunk
+  echo       = TRUE, ## code
+  include    = TRUE, ## plots
+  eval       = TRUE, ## chunk
   message    = FALSE,
   warning    = FALSE,
   error      = FALSE,
@@ -35,48 +35,40 @@ require("DALEX")
 require("spinifex")
 require("tourr")
 require("ggplot2")
-## esp. for basis_cheem() and view_cheem()
-#### basic examples also given in file.
-source("../apps/poc/trees_of_cheem.r") 
-# file.edit("./apps/poc/trees_of_cheem.r")
+## Especially, see basis_cheem() and view_cheem()
+source("../apps/poc/trees_of_cheem.r")
+if(F)
+  file.edit("./apps/poc/trees_of_cheem.r")
 ```
 
 ## Data setup
 
 ```{R}
-str(tourr::flea)
-std_df <- spinifex::scale_sd(tourr::flea[, 1:6])
-holdout_obs <- 10
-
-dat <- std_df[-holdout_obs, 1:6]
-oos_obs <- std_df[holdout_obs,, drop = FALSE] ## Keep as a data.frame
-clas <- flea$species[-holdout_obs]
-oos_clas <- flea$species[holdout_obs]
+str(tourr::flea) ## 74 x 6 numeric + 3 level class
+dat <- spinifex::scale_sd(tourr::flea[, 1:6])
+clas <- tourr::flea$species
+new_obs <- 20
+tgt_var <- clas == clas[new_obs] ## Or regression on a continuous var not in data.
 ```
 
 ## Find a start basis
 
 ```{r}
-cheem_bas <- basis_cheem(
+bas_cheem <- basis_cheem(
   data = dat,
+  holdout_rownum = new_obs,
+  target_var = tgt_var,
   class = clas,
-  new_observation = oos_obs,
-  new_observation_class = oos_clas,
-  ## Selecting DALEX::predict_parts()
+  ## Selecting DALEX::predict_parts(), ## "shap" to x axis.
   parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
-  parts_B = 10,
-  parts_N = NULL,
   ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
-  basis_type = "olda")
-## ... passes to DALEX::predict_parts()
+  basis_type = "olda") ## olda1 to y axis.
 ```
 
 ## View the starting basis
 
 ```{r}
-view_cheem(cheem_basis = cheem_bas,
-           show_parts = TRUE)
-## ... passes to DALEX::plot.predict_parts()
+view_cheem(cheem_basis = bas_cheem, show_parts = TRUE)
 ```
 
 ## Tour the space
@@ -90,16 +82,18 @@ if(interactive())
 
 ## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
 .bas_types <- c('olda', 'pca', 'odp', 'onpp')
-tgt_bases <- array(NA, dim = c(dim(cheem_bas), length(.bas_types))) ## init
+tgt_bases <- array(NA, dim = c(dim(bas_cheem), length(.bas_types))) ## init
 mute <- sapply(seq_along(.bas_types), function(i){
-  tgt_bases[,, i] <<- 
-    basis_cheem(dat, clas, oos_obs, oos_clas,
-                ## X axis is always this SHAPely values
-                parts_type = "shap",
-                parts_B = 10,
-                parts_N = NULL,
-                ## Vary across components on Y axis, expects 'olda', 'pca', 'odp' or 'onpp'
-                basis_type = .bas_types[i])
+  tgt_bases[,, i] <<-
+    bas_cheem <- basis_cheem(
+      data = dat,
+      class = clas,
+      holdout_rownum = new_obs,
+      target_var = tgt_var,
+      ## X axis is always SHAPely values
+      parts_type = "shap",
+      ## Vary across components on Y axis, expects 'olda', 'pca', 'odp' or 'onpp'
+      basis_type = .bas_types[i])
 })
 ## Format for tourr::interpolate() 
 tgt_bases <- as_history_array(tgt_bases, dat)
@@ -107,13 +101,13 @@ tgt_bases <- as_history_array(tgt_bases, dat)
 ## Aesthetic init
 .colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
 .col <- .colorPal[as.integer(clas)]
-.col[holdout_obs] <- "red"
+.col[new_obs] <- "red"
 .shp <- as.integer(clas)
-.shp[holdout_obs] <- 4 ## shape 8 is *
+.shp[new_obs] <- 4 ## shape 8 is *
 .alp <- rep(0.4, nrow(dat))
-.alp[holdout_obs] <- .7
+.alp[new_obs] <- .7
 .siz <- rep(1.5, nrow(dat))
-.siz[holdout_obs] <- 6
+.siz[new_obs] <- 6
 
 ## Tour animation
 spinifex::play_tour_path(
@@ -141,7 +135,7 @@ spinifex::play_tour_path(
 
 ### Frozen tour route
 
-```{r}
+```{r, eval=FALSE}
 if(interactive())
   ?tourr::frozen_tour
 
