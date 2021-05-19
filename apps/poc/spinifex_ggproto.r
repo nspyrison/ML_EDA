@@ -272,14 +272,15 @@ ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat)))
 }
 
 #' @examples
-#' dsmall <- diamonds[sample(nrow(diamonds), 1000), c(1, 5:6, 8:10)]
-#' dat <- scale_sd(dsmall)
+#' dsmall <- diamonds[sample(nrow(diamonds), 1000),]
+#' dat <- scale_sd(dsmall[, c(1, 5:6, 8:10)])
+#' clas <- dsmall$color
 #' bas <- basis_pca(dat)
 #' gt_array <- save_history(dat, grand_tour(), max = 3, start = bas)
 #' 
 #' ggp <- ggplot_tour(gt_array, dat) +
 #'   ggproto_basis_axes() +
-#'   ggproto_data_hex() +
+#'   ggproto_data_hex(50, list(group = clas, fill= clas) ) +
 #'   ggproto_data_background()
 #' animate_gganimate(ggp)
 ## Printing as points
