@@ -301,13 +301,13 @@ tgt_bases <- as_history_array(tgt_bases, dat)
 ## Aesthetic init
 .colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
 .col <- .colorPal[1]
-.col[holdout_obs] <- "red"
-.shp <- as.integer(clas)
-.shp[holdout_obs] <- 4 ## shape 8 is *, but don't translate to plotly well?
+.col[.tgt_idx] <- "red"
+.shp <- 1
+.shp[.tgt_idx] <- 4 ## shape 8 is *, but don't translate to plotly well?
 .alp <- rep(0.4, nrow(dat))
-.alp[holdout_obs] <- .7
+.alp[.tgt_idx] <- .7
 .siz <- rep(1.5, nrow(dat))
-.siz[holdout_obs] <- 6
+.siz[.tgt_idx] <- 6
 
 ## Tour animation
 spinifex::play_tour_path(
