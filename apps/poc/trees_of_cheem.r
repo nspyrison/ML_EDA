@@ -49,11 +49,15 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 #' basis_cheem(data = dat, holdout_rownum = tgt_row,target_var = y_var,
 #'             parts_type = "shap", basis_type = "pca")
 ## Previously hard coded classification target var was: class == new_observation_class
-basis_cheem <- function(data, holdout_rownum, target_var, class = NULL,
-                        parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
-                        parts_B = 10,
-                        parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
-                        basis_type = c("pca", "olda", "odp", "onpp"), ...){
+basis_cheem <- function(
+  data, holdout_rownum, target_var, class = NULL,
+  parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
+  parts_B = 10,
+  parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
+  basis_type = c("pca", "olda", "odp", "onpp"), 
+  keep_large_intermediates = FALSE,
+  ...
+){
   ## Assumptions
   requireNamespace("randomForest")
   requireNamespace("DALEX")
@@ -125,8 +129,10 @@ basis_cheem <- function(data, holdout_rownum, target_var, class = NULL,
   attr(.cheem_bas, "data_oos")  <- as.matrix(data_oos)
   attr(.cheem_bas, "class_else") <- class_else ## Can't call it "class" b/c matrix/df.
   attr(.cheem_bas, "class_oos")  <- class_oos
-  attr(.cheem_bas, "randomForest")  <- .rf
-  attr(.cheem_bas, "explain")       <- .ex_rf
+  if(keep_large_intermediates == TRUE){
+    attr(.cheem_bas, "randomForest")  <- .rf
+    attr(.cheem_bas, "explain")       <- .ex_rf
+  }
   attr(.cheem_bas, "predict_parts") <- .parts
   
   return(.cheem_bas)
