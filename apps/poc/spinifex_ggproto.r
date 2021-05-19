@@ -5,16 +5,7 @@ ggplot_tour <- function(basis_array, data = NULL,
   if(is.null(data) == TRUE)
     data <- attr(basis_array, "data") ## Also could be NULL.
   
-  if(F){
-    .aes_nms <- as.character(mapping_basis) ## With ~, character of a formula
-    .aes_nms <- substring(.aes_nms, 2L) ## Drop ~ character, the string names that need to be included and replicated.
-    
-    
-    cbind(as.matrix(mtcars), letters[1:3], flea$species) ## Wants matrix over df, recycles to the longest obj.
-    ## do this here or in the ggprotos_ ???? Can I extract from aes() calls? not easy.
-  }
-  
-  ## array2df_version2::
+  ## array2df_version2(), approximately
   manip_var <- attr(basis_array, "manip_var") ## Only for manual_tour(), else null
   if(is.null(manip_var)) ## If not a manual tour interpolate
     basis_array <- tourr::interpolate(basis_array, angle = angle)
@@ -26,6 +17,7 @@ ggplot_tour <- function(basis_array, data = NULL,
   ## Assign hidden prepared dataframes
   assign(x = ".spinifex_df_basis",  value = df_basis,  envir = globalenv())
   assign(x = ".spinifex_df_data",   value = df_data,   envir = globalenv())
+  
   ## Also behave as ggpot() with overwritable theme settings
   ret <- ggplot2::ggplot() +
     ggplot2::theme_void() +
@@ -47,16 +39,28 @@ print.ggtour <- function (x, ...){
     ggproto_data_points()
 }
 
+## Initialize common obj from hidden tour objects, test it's existance
+.init_ggproto <- function(){
+  ## Assumption
+  if(exists(".spinifex_df_basis") == FALSE) 
+    stop(paste0("`.spinifex_df_basis` does not exsist, have you run `ggplot_tour` yet?"))
+  
+  ## Initialization
+  df_data  <<- .spinifex_df_data
+  df_basis <<- .spinifex_df_basis
+  n_frames <<- length(unique(df_basis$frame))
+  p <<- nrow(df_basis) / n_frames
+  n <<- nrow(df_data)  / n_frames
+  manip_var <<- attr(.spinifex_df_basis, "manip_var") ## NULL if not a manual tour
+}
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
                                line_size = 1L, text_size = 5L){
   ## Assumptions
   if(position == "off") return()
-  ## Initialization
-  df_data <- .spinifex_df_data
-  df_basis <- .spinifex_df_basis
-  n_frames <- length(unique(df_basis$frame))
-  p <- nrow(df_basis)/n_frames
-  manip_var <- attr(.spinifex_df_basis, "manip_var")
+  
+  ## Initialize
+  .init_ggproto()
+  
   ## Setup and transform
   .angles <- seq(0L, 2L * pi, length = 360L)
   .circle <- data.frame(x = cos(.angles), y = sin(.angles))
@@ -68,7 +72,7 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
   .center <- scale_axes(data.frame(x = 0L, y = 0L), position, .to)
   .circle <- scale_axes(.circle, position, .to)
   df_basis <- scale_axes(df_basis, position, .to)
-  ## Aestheics for the axes segments.
+  ## Aesthetics for the axes segments.
   .axes_col <- "grey50"
   .axes_siz <- line_size
   if (is.null(manip_var) == FALSE) {
@@ -103,16 +107,16 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
 
 ggproto_data_background <- function(zero_mark = TRUE,
                                     gridline_probs = seq(0, 1, .25)){
-  ## Initialization
+  ## Assumptions
+  if(is.null(.spinifex_df_data) == TRUE) return()
   position <- "center" ## Data assumed center.
-  df_data  <- .spinifex_df_data
-  df_basis <- .spinifex_df_basis
-  n_frames <- length(unique(df_basis$frame))
-  p <- nrow(df_basis) / n_frames
-  manip_var <- attr(.spinifex_df_basis, "manip_var") ## NULL if not manip var
   
+  ## Initialize
+  .init_ggproto()
+  
+  ## Setup and transform
   ret <- list() ## Init
-  ## Setup gridlines
+  #### gridlines
   if(is.numeric(gridline_probs) &
      all(gridline_probs >= 0L) &
      all(gridline_probs <= 1L)
@@ -140,7 +144,7 @@ ggproto_data_background <- function(zero_mark = TRUE,
     ret <- c(ret, gridlines)
   }
   
-  ## Setup zero mark, 5% on each side.
+  #### Setup zero mark, 5% on each side.
   if(zero_mark == TRUE){
     .center <- scale_axes(data.frame(x = 0L, y = 0L), position, .to)
     .x_tail <- .05 * diff(range(.x_min, .x_max))
@@ -159,6 +163,8 @@ ggproto_data_background <- function(zero_mark = TRUE,
     )
     ret <- c(ret, zero_mark)
   }
+  
+  ## Return
   return(ret)
 }
 
@@ -166,14 +172,12 @@ ggproto_data_points <- function(aes_args = list(),
                                 identity_args = list()){
   ## Assumptions
   if(is.null(.spinifex_df_data) == TRUE) return()
+  position <- "center" ## Data assumed center.
   aes_args <- as.list(aes_args)
   identity_args <- as.list(identity_args)
   
-  ## Initialization
-  df_data  <- .spinifex_df_data
-  df_basis <- .spinifex_df_basis
-  n_frames <- length(unique(df_basis$frame))
-  n <- nrow(df_data) / n_frames
+  ## Initialize
+  .init_ggproto()
   
   ## Add aes_args to df_data, replicating across frame
   .tgt_len  <- nrow(df_data)
@@ -190,8 +194,7 @@ ggproto_data_points <- function(aes_args = list(),
     #### as ggplot will want to treat this as a vector rather than column of the df?
     #### Causes the split in the legend... i don't see a way around it, without having end
   })
-  ## repair names
-  names(df_data) <- c(.orig_nms, .aes_arg_nms)
+  names(df_data) <- c(.orig_nms, .aes_arg_nms) ## Repair names
   
   ## do.call aes() over the aes_args
   .aes_func <- function(...)
@@ -204,6 +207,7 @@ ggproto_data_points <- function(aes_args = list(),
     )
   }
   .geom_call <- do.call(.geom_func, identity_args)
+  
   ## Return ggproto of projection points
   return(.geom_call)
 }
@@ -213,13 +217,58 @@ ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat)))
                               identity_args = list()){
   ## Assumptions
   if(is.null(.spinifex_df_data) == TRUE) return()
+  position <- "center" ## Data assumed center.
   aes_args <- as.list(aes_args)
   identity_args <- as.list(identity_args)
-  ## Initialization
-  df_data  <- .spinifex_df_data
-  df_basis <- .spinifex_df_basis
-  n_frames <- length(unique(df_basis$frame))
-  n <- nrow(df_data) / n_frames
+  
+  ## Initialize
+  .init_ggproto()
+  
+  ## Add aes_args to df_data, replicating across frame
+  .tgt_len   <- nrow(df_data)
+  .orig_nms <- names(df_data)
+  .aes_arg_nms <- names(aes_args)
+  .mute <- lapply(seq_along(aes_args), function(i){
+    .this_arg <- aes_args[[i]]
+    if(length(.this_arg) %in% c(1L, n) == FALSE)
+      warning(paste0("aes_arg '", .aes_arg_nms[i], "' not of length 1 or data."))
+    .this_col <- rep_len(.this_arg, .tgt_len)
+    df_data[, ncol(df_data) + 1L] <<- .this_col ## Bind column to df_data
+    aes_args[[i]] <<- .this_col ## Replace the value with the string of the orig
+    ## TODO Warning this may cause issues down the line!?
+    #### as ggplot will want to treat this as a vector rather than column of the df?
+    #### Causes the split in the legend... i don't see a way around it, without having end
+  })
+  ## repair names
+  names(df_data) <- c(.orig_nms, .aes_arg_nms)
+  
+  ## do.call aes() over the aes_args 
+  .aes_func <- function(...)
+    ggplot2::aes(x = x, y = y, frame = frame, ...)
+  .aes_call <- do.call(.aes_func, aes_args)
+  ## do.call geom_point() over the identity_args 
+  .geom_func <- function(...){
+    suppressWarnings(
+      ggplot2::geom_text(mapping = .aes_call, data = df_data, ...)
+    )
+  }
+  .geom_call <- do.call(.geom_func, identity_args)
+  ## Return ggproto
+  return(.geom_call)
+}
+
+## Printing as points 
+ggproto_data_hdrcde <- function(aes_args = list(label = as.character(1:nrow(dat))),
+                              identity_args = list()){
+  ## Assumptions
+  if(is.null(.spinifex_df_data) == TRUE) return()
+  requireNamespace("hdrcde")
+  position <- "center" ## Data assumed center.
+  aes_args <- as.list(aes_args)
+  identity_args <- as.list(identity_args)
+  
+  ## Initialize
+  .init_ggproto()
   
   ## Add aes_args to df_data, replicating across frame
   .tgt_len   <- nrow(df_data)
@@ -255,11 +304,15 @@ ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat)))
 }
 
 
-if(F){ ## TESTING
+
+##== TESTING ==##
+if(interactive()){ 
   require("ggplot2")
   require("spinifex")
   require("dplyr")
-  
+  require("hdrcde")
+}
+##  GGPLOT RETURN BEFORE ANIM
 #' @examples 
 #' dat <- scale_sd(mtcars)
 #' bas <- basis_pca(dat)
@@ -282,9 +335,9 @@ if(F){ ## TESTING
 #'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
 #'                       identity_args = list(size= 1.5, alpha = .7)) +
 #'   ggproto_data_text()
-}
 
-if(F) ?render_gganimate
+## TESTING GGPLOT RETURN BEFORE ANIM
+if(F) ?render_gganimate 
 #' @examples 
 #' dat <- scale_sd(::flea[, 1:6])
 #' clas <- flea[, 7]
@@ -311,13 +364,22 @@ if(F) ?render_gganimate
 #' }
 animate_gganimate <- function(
   ggtour, fps = 8L, rewind = FALSE, start_pause = 0.5, end_pause = 1L,
-  ... ## Passed to gganimate::animate.
+  knit_pdf_anim = FALSE, ## Do ignore fps:end_pause, and route to gganimate::knit_print.gganim()?
+  ... ## Passed to gganimate::animate or gganimate::knit_print.gganim
   ){
   requireNamespace("gganimate")
   gga <- ggtour + gganimate::transition_states(frame, transition_length = 0L)
+  
+  ## Pdf animation, early return
+  if(knit_pdf_anim == TRUE){
+    pdf_anim <- knit_print.gganim(gga, ...)
+    return(pdf_anim)
+  }
+  
+  ## Normal animation, with applied options, knit_pdf_anim == FALSE
   anim <- gganimate::animate(
-    gga, fps = fps, rewind = rewind, 
-    start_pause = fps * start_pause, 
+    gga, fps = fps, rewind = rewind,
+    start_pause = fps * start_pause,
     end_pause = fps * end_pause, 
     ...)
   return(anim)
