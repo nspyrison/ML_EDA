@@ -3,6 +3,8 @@ title: "Trees of Cheem"
 author: "Nicholas Spyrison"
 date: "`r Sys.Date()`"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 <!--   #rmarkdown::html_vignette -->
 <!-- # vignette: > -->
@@ -23,6 +25,8 @@ knitr::opts_chunk$set(
   error      = FALSE,
   collapse   = TRUE
 )
+## Set dir relative to package
+knitr::opts_knit$set(root.dir = '..')
 ```
 
 # Intro to trees of cheem
@@ -36,7 +40,9 @@ require("spinifex")
 require("tourr")
 require("ggplot2")
 ## Especially, see basis_cheem() and view_cheem()
-source("../apps/poc/trees_of_cheem.r")
+source("./apps/poc/trees_of_cheem.r")
+## New spinifex ggproto_* api
+source("./apps/poc/spinifex_ggproto.r")
 if(F)
   file.edit("./apps/poc/trees_of_cheem.r")
 ```
@@ -60,16 +66,17 @@ bas_cheem <- basis_cheem(
   target_var = tgt_var,
   class = clas,
   ## Selecting DALEX::predict_parts(), ## "shap" to x axis.
-  parts_type = "shap", ## expects 'shap', 'break_down' or 'break_down_interactions'
+  parts_type = "shap", ## Expects 'shap', 'break_down' or 'break_down_interactions'
   ## Selecting spinifex::basis_*(), expects 'olda', 'pca', 'odp' or 'onpp'
-  basis_type = "olda") ## olda1 to y axis.
+  basis_type = "olda") ## first component of olda to y axis.
 ```
 
-## View the starting basis
+## View a cheem basis
 
 ```{r}
 view_cheem(cheem_basis = bas_cheem, show_parts = TRUE)
 ```
+
 
 ## Tour the space
 
@@ -81,7 +88,7 @@ if(interactive())
 ## tour_path wants an array of target bases to tourr::interpolate() between.
 
 ## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
-.bas_types <- c('olda', 'pca', 'odp', 'onpp')
+.bas_types <- c('RF_importance', 'olda', 'pca', 'odp', 'onpp')
 tgt_bases <- array(NA, dim = c(dim(bas_cheem), length(.bas_types))) ## init
 mute <- sapply(seq_along(.bas_types), function(i){
   tgt_bases[,, i] <<-
@@ -103,7 +110,7 @@ tgt_bases <- as_history_array(tgt_bases, dat)
 .col <- .colorPal[as.integer(clas)]
 .col[new_obs] <- "red"
 .shp <- as.integer(clas)
-.shp[new_obs] <- 4 ## shape 8 is *
+.shp[new_obs] <- 8 ## shape 8 is *, 4 is x
 .alp <- rep(0.4, nrow(dat))
 .alp[new_obs] <- .7
 .siz <- rep(1.5, nrow(dat))
@@ -111,12 +118,12 @@ tgt_bases <- as_history_array(tgt_bases, dat)
 
 ## Tour animation
 spinifex::play_tour_path(
-  tour_path = tgt_bases, 
+  tour_path = tgt_bases,
   data = dat,
   ## position of the basis unit circle
   ## expects:  "center", "left", "right", "bottomleft", "topright", or "off"
   axes = "left", 
-  angle = .05, ## step size distance between interpolation planes 
+  angle = .05, ## Step size distance [radians] between interpolation planes
   fps = 8, 
   ## list that would go inside ggplot2::geom_point(aes(X))
   aes_args = list(), 
@@ -133,6 +140,34 @@ spinifex::play_tour_path(
 # ?htmlwidgets::saveWidget() ## with render_gganimate
 ```
 
+### Cheem tour, useing new api; `ggproto_*` 
+
+Note that aesthetics are still a pain, for the oos obs case.
+
+```{r}
+## Aesthetic init
+.colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
+.col <- .colorPal[as.integer(clas)]
+.col[new_obs] <- "red"
+.shp <- as.integer(clas)
+.shp[new_obs] <- 8 ## shape 8 is *, 4 is x
+.alp <- rep(0.4, nrow(dat))
+.alp[new_obs] <- .7
+.siz <- rep(1.5, nrow(dat))
+.siz[new_obs] <- 6
+
+## Sourced above:
+#source("../apps/poc/spinifex_ggproto.r")
+ggt <-
+  ggplot_tour(tgt_bases, dat) +
+  ggproto_basis_axes() +
+  ggproto_data_points(identity_args = list(color = .col, shape = .shp,
+                                           size = .siz, alpha = .alp)) +
+  ggproto_data_background()
+
+animate_plotly(ggt)
+```
+
 ### Frozen tour route
 
 ```{r, eval=FALSE}
@@ -144,7 +179,7 @@ freezer_mat <- matrix(NA, nrow = nrow(cheem_bas), ncol = ncol(cheem_bas))
 ## Try to freeze the first columns, the SHAP values.
 freezer_mat[, 1] <- .99 * (1 / nrow(cheem_bas))
 
-## Tour attempt errorring 
+## Tour attempt erroring
 if(interactive())
   tourr::animate_xy(data = dat,
                     tour_path = tourr::frozen_tour(frozen = freezer_mat),

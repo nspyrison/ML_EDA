@@ -28,7 +28,6 @@ ggplot_tour <- function(basis_array, data = NULL,
                    legend.box = "vertical",         ## Between aesthetic
                    legend.margin = margin())        ## Try to minimize margin.
   
-  #attr(ret, "class") <- "ggtour"
   return(ret)
 }
 ## Print method
@@ -60,6 +59,19 @@ print.ggtour <- function (x, ...){
   }else{
     .scale_to <<- data.frame(x = c(-1L, 1L), y = c(-1L, 1L))
   }
+  
+  ## For some reason not working, too many levels and
+  # ## Replicate arg lists across frame if needed
+  # if(exists("aes_args") == TRUE){
+  #   .tgt_len <- nrow(.df_data)
+  #   .aes_args <<- lapply_rep_len(aes_args, nrow_array = .tgt_len, nrow_data = .n)
+  # }
+  # if(exists("identity_args") == TRUE){
+  #   .tgt_len <- nrow(.df_data)
+  #   identity_args <<- lapply_rep_len(identity_args, nrow_array = .tgt_len, nrow_data = .n)
+  # }
+  
+  return()
 }
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
                                line_size = 1L, text_size = 5L){
@@ -68,7 +80,6 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
   
   ## Initialize
   .init_ggproto()
-  
   
   ## Setup and transform
   .angles <- seq(0L, 2L * pi, length = 360L)
@@ -110,7 +121,7 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
 }
 
 ggproto_data_background <- function(zero_mark = TRUE,
-                                    gridline_probs = seq(0, 1, .25)){
+                                    gridlines = 5){
   ## Assumptions
   if(is.null(.spinifex_df_data) == TRUE) return()
   position <- "center" ## Data assumed center.
@@ -121,22 +132,18 @@ ggproto_data_background <- function(zero_mark = TRUE,
   ## Setup and transform
   ret <- list() ## Init
   #### gridlines
-  if(is.numeric(gridline_probs) &
-     all(gridline_probs >= 0L) &
-     all(gridline_probs <= 1L)
-  ){
-    .x_min <- min(.scale_to[, 1L])
-    .y_min <- min(.scale_to[, 2L])
-    .x_max <- max(.scale_to[, 1L])
-    .y_max <- max(.scale_to[, 2L])
-    .x_q <- .x_min + gridline_probs * diff(range(.x_min, .x_max))
-    .y_q <- .y_min + gridline_probs * diff(range(.y_min, .y_max))
-    .len <- length(gridline_probs)
+  if(is.numeric(gridlines) & gridlines > 2L){
+    .rates <- seq(0L, 1L, 1L / round(gridlines - 1L, 0L))
+    .min <- min(min(.scale_to[, 1L]), min(.scale_to[, 2L]))
+    .max <- max(max(.scale_to[, 1L]), max(.scale_to[, 2L]))
+    .grid1d <- .min + .rates * (.max - .min)
+    #.grid1d <- .grid1d - median(.grid1d) ## center
+    .len <- length(.rates)
     .df_gridlines <- data.frame(
-      x     = c(rep(.x_min, .len), .x_q),
-      x_end = c(rep(.x_max, .len), .x_q),
-      y     = c(.y_q, rep(.y_min, .len)),
-      y_end = c(.y_q, rep(.y_max, .len))
+      x     = c(rep(.min, .len), .grid1d),
+      x_end = c(rep(.max, .len), .grid1d),
+      y     = c(.grid1d, rep(.min, .len)),
+      y_end = c(.grid1d, rep(.max, .len))
     )
     
     gridlines <- ggplot2::geom_segment(
@@ -150,13 +157,15 @@ ggproto_data_background <- function(zero_mark = TRUE,
   #### Setup zero mark, 5% on each side.
   if(zero_mark == TRUE){
     .center <- scale_axes(data.frame(x = 0L, y = 0L), position, .scale_to)
-    .x_tail <- .05 * diff(range(.x_min, .x_max))
-    .y_tail <- .05 * diff(range(.y_min, .y_max))
+    .min <- min(min(.scale_to[, 1L]), min(.scale_to[, 2L]))
+    .max <- max(max(.scale_to[, 1L]), max(.scale_to[, 2L]))
+    .tail <- .05 * (.max - .min)
+    
     .df_zero_mark <-
-      data.frame(x     = c(.center[, 1L] - .x_tail, .center[, 1L]),
-                 x_end = c(.center[, 1L] + .x_tail, .center[, 1L]),
-                 y     = c(.center[, 2L], .center[, 2L] - .y_tail),
-                 y_end = c(.center[, 2L], .center[, 2L] + .y_tail)
+      data.frame(x     = c(.center[, 1L] - .tail, .center[, 1L]),
+                 x_end = c(.center[, 1L] + .tail, .center[, 1L]),
+                 y     = c(.center[, 2L], .center[, 2L] - .tail),
+                 y_end = c(.center[, 2L], .center[, 2L] + .tail)
       )
     
     zero_mark <- ggplot2::geom_segment(
@@ -169,6 +178,17 @@ ggproto_data_background <- function(zero_mark = TRUE,
   
   ## Return
   return(ret)
+}
+
+lapply_rep_len <- function(list, nrow_array, nrow_data){
+  .mute <- lapply(seq_along(list), function(i){
+    .this_vector <- list[[i]]
+    if(length(.this_vector) %in% c(1L, nrow_data) == FALSE)
+      warning(paste0("aes_arg '", .aes_arg_nms[i], "' not of length 1 or data."))
+    .replicated_vector <- rep_len(.this_vector, nrow_array)
+    list[[i]] <<- .replicated_vector ## Replace the value with the string of the orig
+  })
+  return(list)
 }
 
 #' @examples
@@ -190,25 +210,12 @@ ggproto_data_points <- function(aes_args = list(),
   aes_args <- as.list(aes_args)
   identity_args <- as.list(identity_args)
   
-  ## Initialize
+  ## Initialize, inc replicating arg lists.
   .init_ggproto()
+  .tgt_len <- nrow(.df_data)
+  aes_args <- lapply_rep_len(aes_args, nrow_array = .tgt_len, nrow_data = .n)
+  identity_args <- lapply_rep_len(identity_args, nrow_array = .tgt_len, nrow_data = .n)
   
-  ## Add aes_args to df_data, replicating across frame
-  .tgt_len  <- nrow(.df_data)
-  .orig_nms <- names(.df_data)
-  .aes_arg_nms <- names(aes_args)
-  .mute <- lapply(seq_along(aes_args), function(i){
-    .this_arg <- aes_args[[i]]
-    if(length(.this_arg) %in% c(1L, .n) == FALSE)
-      warning(paste0("aes_arg '", .aes_arg_nms[i], "' not of length 1 or data."))
-    .this_col <- rep_len(.this_arg, .tgt_len)
-    .df_data[, ncol(.df_data) + 1L] <<- .this_col ## Bind column to df_data
-    aes_args[[i]] <<- .this_col ## Replace the value with the string of the orig
-    ## TODO Warning this may cause issues down the line!?
-    #### as ggplot will want to treat this as a vector rather than column of the df?
-    #### Causes the split in the legend... i don't see a way around it, without having end
-  })
-  names(.df_data) <- c(.orig_nms, .aes_arg_nms) ## Repair names
   
   ## do.call aes() over the aes_args
   .aes_func <- function(...)
@@ -226,7 +233,7 @@ ggproto_data_points <- function(aes_args = list(),
   return(.geom_call)
 }
 
-## Printing as points 
+## Printing as points
 ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat))),
                               identity_args = list()){
   ## Assumptions
@@ -235,28 +242,10 @@ ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat)))
   aes_args <- as.list(aes_args)
   identity_args <- as.list(identity_args)
   
-  ## Initialize
+  ## Initialize, inc replicating arg lists.
   .init_ggproto()
   
-  ## Add aes_args to df_data, replicating across frame
-  .tgt_len   <- nrow(.df_data)
-  .orig_nms <- names(.df_data)
-  .aes_arg_nms <- names(aes_args)
-  .mute <- lapply(seq_along(aes_args), function(i){
-    .this_arg <- aes_args[[i]]
-    if(length(.this_arg) %in% c(1L, .n) == FALSE)
-      warning(paste0("aes_arg '", .aes_arg_nms[i], "' not of length 1 or data."))
-    .this_col <- rep_len(.this_arg, .tgt_len)
-    .df_data[, ncol(.df_data) + 1L] <<- .this_col ## Bind column to df_data
-    aes_args[[i]] <<- .this_col ## Replace the value with the string of the orig
-    ## TODO Warning this may cause issues down the line!?
-    #### as ggplot will want to treat this as a vector rather than column of the df?
-    #### Causes the split in the legend... i don't see a way around it, without having end
-  })
-  ## repair names
-  names(.df_data) <- c(.orig_nms, .aes_arg_nms)
-  
-  ## do.call aes() over the aes_args 
+  ## do.call aes() over the aes_args
   .aes_func <- function(...)
     ggplot2::aes(x = x, y = y, frame = frame, ...)
   .aes_call <- do.call(.aes_func, aes_args)
@@ -293,26 +282,8 @@ ggproto_data_hex <- function(bins = 30,
   aes_args <- as.list(aes_args)
   identity_args <- as.list(identity_args)
   
-  ## Initialize
+  ## Initialize, inc replicating arg lists.
   .init_ggproto()
-  
-  ## Add aes_args to df_data, replicating across frame
-  .tgt_len   <- nrow(.df_data)
-  .orig_nms <- names(.df_data)
-  .aes_arg_nms <- names(aes_args)
-  .mute <- lapply(seq_along(aes_args), function(i){
-    .this_arg <- aes_args[[i]]
-    if(length(.this_arg) %in% c(1L, .n) == FALSE)
-      warning(paste0("aes_arg '", .aes_arg_nms[i], "' not of length 1 or data."))
-    .this_col <- rep_len(.this_arg, .tgt_len)
-    .df_data[, ncol(.df_data) + 1L] <<- .this_col ## Bind column to df_data
-    aes_args[[i]] <<- .this_col ## Replace the value with the string of the orig
-    ## TODO Warning this may cause issues down the line!?
-    #### as ggplot will want to treat this as a vector rather than column of the df?
-    #### Causes the split in the legend... i don't see a way around it, without having end
-  })
-  ## repair names
-  names(.df_data) <- c(.orig_nms, .aes_arg_nms)
   
   ## do.call aes() over the aes_args
   .aes_func <- function(...)
@@ -446,11 +417,13 @@ animate_plotly <- function(
   ggp <- plotly::animation_opts(p = ggp, frame = 1L / fps * 1000L,
                                 transition = 0L, redraw = FALSE)
   ggp <- plotly::layout(
-    ggp, 
-    showlegend = FALSE, 
-    yaxis = list(showgrid = FALSE, showline = FALSE),
-    xaxis = list(scaleanchor = "y", scalaratio = 1L, showgrid = FALSE, showline = FALSE),
+    ggp,
+    showlegend = FALSE,
+    yaxis = list(showgrid = FALSE, showline = FALSE,), ##  fixedrange = TRUE is a curse.
+    xaxis = list(showgrid = FALSE, showline = FALSE,
+                 scaleanchor = "y", scalaratio = 1L),
     ...
   )
+  ggp <- plotly::config(ggp, displayModeBar = FALSE)
   return(ggp)
 }
