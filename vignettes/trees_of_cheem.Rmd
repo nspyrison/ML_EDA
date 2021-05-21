@@ -2,7 +2,9 @@
 title: "Trees of Cheem"
 author: "Nicholas Spyrison"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document:
+    toc: true
 editor_options: 
   chunk_output_type: console
 ---
@@ -23,7 +25,9 @@ knitr::opts_chunk$set(
   message    = FALSE,
   warning    = FALSE,
   error      = FALSE,
-  collapse   = TRUE
+  collapse   = TRUE,
+  cache      = TRUE,
+  cache.lazy = FALSE
 )
 ## Set dir relative to package
 knitr::opts_knit$set(root.dir = '..')
@@ -99,21 +103,22 @@ mute <- sapply(seq_along(.bas_types), function(i){
       target_var = tgt_var,
       ## X axis is always SHAPely values
       parts_type = "shap",
-      ## Vary across components on Y axis, expects 'olda', 'pca', 'odp' or 'onpp'
+      ## Y axis components, varying across basis_types
       basis_type = .bas_types[i])
 })
 ## Format for tourr::interpolate() 
 tgt_bases <- as_history_array(tgt_bases, dat)
 
-## Aesthetic init
+## Aesthetic init, Note that this is reused for the next several chunks in the `identity_args`
 .colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
 .col <- .colorPal[as.integer(clas)]
 .col[new_obs] <- "red"
-.shp <- as.integer(clas)
+.shapePal <- 15:17
+.shp <- .shapePal[as.integer(clas)]
 .shp[new_obs] <- 8 ## shape 8 is *, 4 is x
-.alp <- rep(0.4, nrow(dat))
-.alp[new_obs] <- .7
-.siz <- rep(1.5, nrow(dat))
+.alp <- rep(0.7, nrow(dat))
+.alp[new_obs] <- .9
+.siz <- rep(2, nrow(dat))
 .siz[new_obs] <- 6
 
 ## Tour animation
@@ -145,28 +150,43 @@ spinifex::play_tour_path(
 Note that aesthetics are still a pain, for the oos obs case.
 
 ```{r}
-## Aesthetic init
-.colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
-.col <- .colorPal[as.integer(clas)]
-.col[new_obs] <- "red"
-.shp <- as.integer(clas)
-.shp[new_obs] <- 8 ## shape 8 is *, 4 is x
-.alp <- rep(0.4, nrow(dat))
-.alp[new_obs] <- .7
-.siz <- rep(1.5, nrow(dat))
-.siz[new_obs] <- 6
-
 ## Sourced above:
-#source("../apps/poc/spinifex_ggproto.r")
+#source("./apps/poc/spinifex_ggproto.r")
 ggt <-
   ggplot_tour(tgt_bases, dat) +
   ggproto_basis_axes() +
   ggproto_data_points(identity_args = list(color = .col, shape = .shp,
                                            size = .siz, alpha = .alp)) +
-  ggproto_data_background()
+  ggproto_data_background(gridlines = FALSE)
 
 animate_plotly(ggt)
 ```
+
+### Discrete view of cheem's target bases
+
+```{r, fig.width=8}
+## Sourced above:
+#source("./apps/poc/spinifex_ggproto.r")
+.parts <- attributes(bas_cheem)$predict_parts ## Note that array loses predicted parts
+gg_ls <- list(plot(.parts))
+mute <- sapply(seq_along(tgt_bases), function(i){
+  .this_tgt_base <- tgt_bases[,, i]
+  gg_ls[[i + 1]] <<-
+    ggplot_tour(.this_tgt_base, dat) +
+    ggproto_basis_axes() +
+    ggproto_data_points(identity_args = list(color = .col, shape = .shp,
+                                             size = .siz, alpha = .alp)) +
+    ggproto_data_background(gridlines = FALSE)
+})
+
+.t <- theme(axis.title = element_text())
+gg_ls[[1]]
+gg_ls[[2]] + .t + labs(x = "shap", y = .bas_types[2 - 1])
+gg_ls[[3]] + .t + labs(x = "shap", y = .bas_types[3 - 1])
+gg_ls[[4]] + .t + labs(x = "shap", y = .bas_types[4 - 1])
+gg_ls[[5]] + .t + labs(x = "shap", y = .bas_types[5 - 1])
+gg_ls[[6]] + .t + labs(x = "shap", y = .bas_types[6 - 1])
+``` 
 
 ### Frozen tour route
 

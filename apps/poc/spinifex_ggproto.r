@@ -120,8 +120,9 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
   )
 }
 
+##TODO: gridlines still not lined up wit zero mark as it's powered from the extrema, not 0.
 ggproto_data_background <- function(zero_mark = TRUE,
-                                    gridlines = 5){
+                                    gridlines = 0){
   ## Assumptions
   if(is.null(.spinifex_df_data) == TRUE) return()
   position <- "center" ## Data assumed center.
@@ -132,18 +133,20 @@ ggproto_data_background <- function(zero_mark = TRUE,
   ## Setup and transform
   ret <- list() ## Init
   #### gridlines
-  if(is.numeric(gridlines) & gridlines > 2L){
+  if(is.numeric(gridlines) & gridlines > 1L){
     .rates <- seq(0L, 1L, 1L / round(gridlines - 1L, 0L))
     .min <- min(min(.scale_to[, 1L]), min(.scale_to[, 2L]))
     .max <- max(max(.scale_to[, 1L]), max(.scale_to[, 2L]))
+    .x_min <- min(.scale_to[, 1L])
+    .y_min <- min(.scale_to[, 12])
     .grid1d <- .min + .rates * (.max - .min)
     #.grid1d <- .grid1d - median(.grid1d) ## center
     .len <- length(.rates)
     .df_gridlines <- data.frame(
-      x     = c(rep(.min, .len), .grid1d),
-      x_end = c(rep(.max, .len), .grid1d),
-      y     = c(.grid1d, rep(.min, .len)),
-      y_end = c(.grid1d, rep(.max, .len))
+      x     = c(rep(.x_min, .len), .grid1d),
+      x_end = c(rep(.x_min, .len), .grid1d),
+      y     = c(.grid1d, rep(.y_min, .len)),
+      y_end = c(.grid1d, rep(.y_min, .len))
     )
     
     gridlines <- ggplot2::geom_segment(
@@ -413,13 +416,19 @@ animate_plotly <- function(
   ... ## Passed to plotly::layout.
 ){
   requireNamespace("plotly")
-  ggp <- plotly::ggplotly(p = ggtour)
+  gg <- ggtour + 
+    ## to block plotly.js warning: supoort of horizontal legend;
+    #### https://github.com/plotly/plotly.js/issues/53 
+  ggplot2::theme(legend.position = "right",
+                 legend.direction = "vertical",
+                 legend.box = "horizontal")
+  ggp <- plotly::ggplotly(p = gg)
   ggp <- plotly::animation_opts(p = ggp, frame = 1L / fps * 1000L,
                                 transition = 0L, redraw = FALSE)
   ggp <- plotly::layout(
     ggp,
     showlegend = FALSE,
-    yaxis = list(showgrid = FALSE, showline = FALSE,), ##  fixedrange = TRUE is a curse.
+    yaxis = list(showgrid = FALSE, showline = FALSE), ##  fixedrange = TRUE is a curse.
     xaxis = list(showgrid = FALSE, showline = FALSE,
                  scaleanchor = "y", scalaratio = 1L),
     ...
