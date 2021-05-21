@@ -14,9 +14,9 @@ editor_options:
 https://github.com/njtierney/naniar/blob/master/vignettes/getting-started-w-naniar.Rmd -->
 ```{r knitr setup, include = FALSE}
 knitr::opts_chunk$set(
-  echo       = TRUE,   # code
-  include    = TRUE,   # plots
-  eval       = TRUE,   # chunk
+  echo       = TRUE, ## code
+  include    = TRUE, ## plots
+  eval       = TRUE, ## chunk
   message    = FALSE,
   warning    = FALSE,
   error      = FALSE,
@@ -48,7 +48,9 @@ if(require("treeshap") == FALSE)
 require("treeshap")
 ## Local functions, esp. for basis_cheem() and view_cheem()
 source("./apps/poc/trees_of_cheem.r")
-if(F) ## Manualy run to view file:
+## New spinifex ggproto_* api
+source("./apps/poc/spinifex_ggproto.r")
+if(F) ## Manually run to view file:
   file.edit("./apps/poc/trees_of_cheem.r")
 ```
 
@@ -68,7 +70,7 @@ dat <- raw %>% dplyr::select(-c(`nationality`, `potential`, `overall`))
 dat <- spinifex::scale_sd(dat) %>% data.matrix()
 tgt_var <- raw$overall
 
-## intrinsic data dimensionality concerns; even the column names are grouped measures.
+## Intrinsic data dimensionality concerns; even the column names are grouped measures.
 colnames(dat)
 ```
 
@@ -154,7 +156,7 @@ spinifex::play_tour_path(
   t_array,
   angle = .2, ## Distance interpolated in radians
   axes = "left",
-  render_type = render_plotly, ## or render_gganimate for a .gif
+  render_type = render_plotly, ## Or render_gganimate for a .gif
   identity_args = list(alpha = .1),
   ggproto = list(theme_spinifex(),
                  ggtitle("Grand tour, 10 random bases, interp w/ angle = .2"))
@@ -197,9 +199,9 @@ mv <- manip_var_of(bas)
 tic("render manual tour")
 spinifex::play_manual_tour(
   bas, dat, manip_var = mv,
-  angle = .1, ## distance interpolated in radians
+  angle = .1, ## Distance [radians] between interpolated frame
   axes = "left",
-  render_type = render_plotly, ## or render_gganimate for a .gif
+  render_type = render_plotly, ## Or render_gganimate for a .gif
   identity_args = list(alpha = .1),
   ggproto = list(theme_spinifex(),
                  ggtitle("manual tour")
@@ -262,12 +264,12 @@ bas_cheem <- basis_cheem(
 toc()
 #### Classification on nationality
 ## 1) raw: 127 sec,
-## 2) top 25% nationalities,(80% of obs) 88sec,
+## 2) top 25% nationalities,(80% of obs): 88sec,
 #### Regression on continuous `overall` aggregate score
-## 3) predicting `overall`
+## 3) predicting `overall`: 101 sec
 ```
 
-## View the starting basis
+## View a cheem basis
 
 ```{r}
 paste0("View 1 cheem basis for ", .tgt_nm)
@@ -275,13 +277,23 @@ view_cheem(cheem_basis = bas_cheem,
            show_parts = TRUE)
 ```
 
+
+## Where to go next
+
+1. I would like to perform a _frozen_ tour, locking the x-axis in place, and varying the components in the y-axis
+    + `tourr::frozen_tour()` doesn't seem to be functioning well.
+2. In the toy example in `trees_of_cheem.rmd` we were able to do a limited tour to 4 basis functions
+    + In the `fifa` case we don't have a great classification variable without remaking the data; lose use of 2 of the `basis_*` functions.
+3. Step 1: want to produce the discrete version looking at the target bases side by side
+
+
 ## Cheem tour
 
 ### Short cheem tour
 
 Still thinking about how to best do structure the functions, but something to this effect.
 
-```{r}
+```{r, eval=FALSE}
 ## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
 .bas_types <- c('pca', 'onpp') ## 'olda' and 'odp' need class
 tgt_bases <- array(NA, dim = c(dim(bas_cheem), length(.bas_types))) ## init
