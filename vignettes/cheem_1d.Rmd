@@ -1,0 +1,245 @@
+---
+title: "Trees of Cheem"
+author: "Nicholas Spyrison"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: united
+editor_options: 
+  chunk_output_type: console
+---
+<!--   #rmarkdown::html_vignette -->
+<!-- # vignette: > -->
+<!-- #   %\VignetteIndexEntry{spinifex} -->
+<!-- #   %\VignetteEngine{knitr::rmarkdown} -->
+<!-- #   %\VignetteEncoding{UTF-8}{inputenc} -->
+<!-- #   \usepackage[utf8]{inputenc} -->
+
+<!-- #Example vignette: 
+https://github.com/njtierney/naniar/blob/master/vignettes/getting-started-w-naniar.Rmd -->
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE, ## code
+  include    = TRUE, ## plots
+  eval       = TRUE, ## chunk
+  message    = FALSE,
+  warning    = FALSE,
+  error      = FALSE,
+  collapse   = TRUE,
+  cache      = TRUE,
+  cache.lazy = FALSE
+)
+## Set dir relative to package
+knitr::opts_knit$set(root.dir = '..')
+```
+
+# Intro to trees of cheem
+
+## Requirements
+
+```{R}
+require("DALEX")
+#require("treeshap")
+require("spinifex")
+require("tourr")
+require("ggplot2")
+## Especially, see basis_cheem() and view_cheem()
+source("./apps/poc/trees_of_cheem.r")
+## New spinifex ggproto_* api
+source("./apps/poc/spinifex_ggproto.r")
+if(F)
+  file.edit("./apps/poc/trees_of_cheem.r")
+```
+
+## Data setup
+
+```{R}
+str(tourr::flea) ## 74 x 6 numeric + 3 level class
+dat <- spinifex::scale_sd(tourr::flea[, 1:6])
+clas <- tourr::flea$species
+new_obs <- 20
+tgt_var <- clas == clas[new_obs] ## Or regression on a continuous var not in data.
+```
+
+## Find a start basis
+
+```{r}
+bas_cheem <- basis_cheem(
+  data = dat,
+  holdout_rownum = new_obs,
+  target_var = tgt_var,
+  class = clas,
+  parts_type = "shap",
+  basis_type = NULL)
+```
+
+## View a cheem basis
+
+```{r}
+plot(cheem_basis = bas_cheem, show_parts = TRUE)
+
+cheem_basis = bas_cheem; show_parts = TRUE;
+oos_identity_args = list(color = "red", size = 5, shape = 8)
+
+.data_else <- attributes(cheem_basis)$data_else
+.data_oos  <- attributes(cheem_basis)$data_oos
+.class_else <- attributes(cheem_basis)$class_else
+.class_oos  <- attributes(cheem_basis)$class_oos
+.cn <- colnames(cheem_basis)
+
+  ## oos projection not done in view_frames
+  .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
+  
+  .oos_pt_func <- function(...){
+    geom_point(aes_string(x = .cn[1L], y = .cn[2L]),
+             .proj_new_obs, ...)
+  }
+  .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
+  
+  ## spinifex::view_frame(data_else)
+  gg <- view_frame(cheem_basis, data = .data_else,
+                   aes_args = list(color = .class_else, shape = .class_else),
+                   axes = "left") +
+    theme(legend.position = "off",
+          axis.title = element_text()) +
+    labs(x = .cn[1L],
+         y = .cn[2L]) +
+    .oos_pt_call
+  
+  ## Append plot(predict_parts(), by patchwork?
+  if(show_parts == TRUE){
+    require("patchwork")
+    .parts <- attributes(cheem_basis)$predict_parts
+    gg <- gg + plot(.parts, ...)
+  }
+  
+  return(gg)
+```
+
+
+## Tour the space
+
+### Short cheem tour, 4 target bases
+
+```{r}
+if(interactive())
+  ?spinifex::play_tour_path()
+## tour_path wants an array of target bases to tourr::interpolate() between.
+
+## Let's naively find different cheem bases where SHAP is always on X and we find different first components for Y.
+.bas_types <- c('RF_importance', 'olda', 'pca', 'odp', 'onpp')
+tgt_bases <- array(NA, dim = c(dim(bas_cheem), length(.bas_types))) ## init
+mute <- sapply(seq_along(.bas_types), function(i){
+  tgt_bases[,, i] <<-
+    bas_cheem <- basis_cheem(
+      data = dat,
+      class = clas,
+      holdout_rownum = new_obs,
+      target_var = tgt_var,
+      ## X axis is always SHAPely values
+      parts_type = "shap",
+      ## Y axis components, varying across basis_types
+      basis_type = .bas_types[i])
+})
+## Format for tourr::interpolate() 
+tgt_bases <- as_history_array(tgt_bases, dat)
+
+## Aesthetic init, Note that this is reused for the next several chunks in the `identity_args`
+.colorPal <- RColorBrewer::brewer.pal(8, "Dark2")
+.col <- .colorPal[as.integer(clas)]
+.col[new_obs] <- "red"
+.shapePal <- 15:17
+.shp <- .shapePal[as.integer(clas)]
+.shp[new_obs] <- 8 ## shape 8 is *, 4 is x
+.alp <- rep(0.7, nrow(dat))
+.alp[new_obs] <- .9
+.siz <- rep(2, nrow(dat))
+.siz[new_obs] <- 6
+
+## Tour animation
+spinifex::play_tour_path(
+  tour_path = tgt_bases,
+  data = dat,
+  ## position of the basis unit circle
+  ## expects:  "center", "left", "right", "bottomleft", "topright", or "off"
+  axes = "left", 
+  angle = .05, ## Step size distance [radians] between interpolation planes
+  fps = 8, 
+  ## list that would go inside ggplot2::geom_point(aes(X))
+  aes_args = list(), 
+  ## list that would go inside geom, outside aes: ggplot2::geom_point(aes(), X)
+  identity_args = list(color = .col, shape = .shp,
+                       size = .siz, alpha = .alp),
+  ## list of items to "add" to a ggplot() + X
+  ggproto = list(spinifex::theme_spinifex()),
+  ## expects render_gganimate (.gif) or render_plotly (.html widget)
+  render_type = render_plotly
+)
+## For saving, store output of spinifex::play_tour_path()
+# ?gganimate::anim_save() ## with render_gganimate
+# ?htmlwidgets::saveWidget() ## with render_gganimate
+```
+
+### Cheem tour, useing new api; `ggproto_*` 
+
+Note that aesthetics are still a pain, for the oos obs case.
+
+```{r}
+## Sourced above:
+#source("./apps/poc/spinifex_ggproto.r")
+ggt <-
+  ggplot_tour(tgt_bases, dat) +
+  ggproto_basis_axes() +
+  ggproto_data_points(identity_args = list(color = .col, shape = .shp,
+                                           size = .siz, alpha = .alp)) +
+  ggproto_data_background(gridlines = FALSE)
+
+animate_plotly(ggt)
+```
+
+### Discrete view of cheem's target bases
+
+```{r, fig.width=8}
+## Sourced above:
+#source("./apps/poc/spinifex_ggproto.r")
+.parts <- attributes(bas_cheem)$predict_parts ## Note that array loses predicted parts
+gg_ls <- list(plot(.parts))
+mute <- sapply(seq_along(tgt_bases), function(i){
+  .this_tgt_base <- tgt_bases[,, i]
+  gg_ls[[i + 1]] <<-
+    ggplot_tour(.this_tgt_base, dat) +
+    ggproto_basis_axes() +
+    ggproto_data_points(identity_args = list(color = .col, shape = .shp,
+                                             size = .siz, alpha = .alp)) +
+    ggproto_data_background(gridlines = FALSE)
+})
+
+.t <- theme(axis.title = element_text())
+gg_ls[[1]]
+gg_ls[[2]] + .t + labs(x = "shap", y = .bas_types[2 - 1])
+gg_ls[[3]] + .t + labs(x = "shap", y = .bas_types[3 - 1])
+gg_ls[[4]] + .t + labs(x = "shap", y = .bas_types[4 - 1])
+gg_ls[[5]] + .t + labs(x = "shap", y = .bas_types[5 - 1])
+gg_ls[[6]] + .t + labs(x = "shap", y = .bas_types[6 - 1])
+``` 
+
+### Frozen tour route
+
+```{r, eval=FALSE}
+if(interactive())
+  ?tourr::frozen_tour
+
+## Create a freezing matrix of dim == basis
+freezer_mat <- matrix(NA, nrow = nrow(cheem_bas), ncol = ncol(cheem_bas))
+## Try to freeze the first columns, the SHAP values.
+freezer_mat[, 1] <- .99 * (1 / nrow(cheem_bas))
+
+## Tour attempt erroring
+if(interactive())
+  tourr::animate_xy(data = dat,
+                    tour_path = tourr::frozen_tour(frozen = freezer_mat),
+                    start = cheem_bas)
+## R> Error in svd(t(Fa) %*% Fz) : infinite or missing values in 'x'
+```
+

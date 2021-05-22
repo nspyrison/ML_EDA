@@ -185,9 +185,10 @@ print.cheem_basis <- function (x, ...)
 #' 
 #' if(F)
 #'   ggsave("PoC_view_cheem.pdf", ggcheem_proj, device ="pdf", width = 6, height = 3, units="in")
-view_cheem <- function(cheem_basis, show_parts = TRUE,
-                       oos_identity_args = list(color = "red", size = 5, shape = 8),
-                       ...){ ## Passed to plot.predict_parts()
+autoplot.cheem_basis <- plot.cheem_basis <- view_cheem <- function(
+  cheem_basis, show_parts = TRUE,
+  oos_identity_args = list(color = "red", size = 5, shape = 8),
+  ...){ ## Passed to plot.predict_parts()
   .data_else <- attributes(cheem_basis)$data_else
   .data_oos  <- attributes(cheem_basis)$data_oos
   .class_else <- attributes(cheem_basis)$class_else
@@ -197,23 +198,43 @@ view_cheem <- function(cheem_basis, show_parts = TRUE,
   ## oos projection not done in view_frames
   .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
   
-  .oos_pt_func <- function(...){
-    geom_point(aes_string(x = .cn[1L], y = .cn[2L]),
-             .proj_new_obs, ...)
+  
+  ## 2D geom_points variant:
+  if(ncol(cheem_basis) == 2L){
+    .oos_pt_func <- function(...)
+      geom_point(aes_string(x = .cn[1L], y = .cn[2L]), .proj_new_obs, ...)
+    .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
+    
+    .ggp_data <- ggproto_data_points(
+      identity_args = list(color = .class_else, shape = .class_else)) +
+      .oos_pt_call
   }
-  .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
+  
+  ## 1D geom_hist variant:
+  if(ncol(cheem_basis) == 1L){
+    .oos_rug_func <- function(...)
+      suppressWarnings(geom_rug(aes_string(x = .cn[1L]), .proj_new_obs, ...))
+    .oos_rug_call <- do.call(.oos_hist_func, oos_identity_args)
+ 
+    
+    .ggp_data <- ggproto_data_points( ##TODO THIS NEEDS TO BE A NEW ggproto_data_histrug
+      identity_args = list(color = .class_else)) +
+      .oos_rug_call
+    
+  }
+  
   
   ## spinifex::view_frame(data_else)
-  gg <- view_frame(cheem_basis, data = .data_else,
-                   aes_args = list(color = .class_else, shape = .class_else),
-                   axes = "left") +
+  gg <- ggplot_tour(tgt_bases, dat) +
+    ggproto_basis_axes() +
+    ggproto_data_background(gridlines = FALSE) +
+    .ggp_data +
     theme(legend.position = "off",
           axis.title = element_text()) +
     labs(x = .cn[1L],
-         y = .cn[2L]) +
-    .oos_pt_call
+         y = .cn[2L])
   
-  ## Append plot(predict_parts(), by patchwork?
+  ## Plot(predict_parts(), by patchwork?
   if(show_parts == TRUE){
     require("patchwork")
     .parts <- attributes(cheem_basis)$predict_parts
