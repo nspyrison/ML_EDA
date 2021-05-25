@@ -261,7 +261,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
 #' library("DALEX")
 #' 
 #' ## Make a DALEX "explainer" of in smaple data
-#' explain_rf <- DALEX::explain(model = titanic_rf,  
+#' explain_rf <- DALEX::explain(model = titanic_rf,
 #'                              data = titanic_imputed[, -9],
 #'                              y = titanic_imputed$survived == "yes", 
 #'                              label = "Random Forest")

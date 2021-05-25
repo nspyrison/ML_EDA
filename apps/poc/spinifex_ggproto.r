@@ -1,13 +1,12 @@
 ggplot_tour <- function(basis_array, data = NULL,
-                        angle = .05 ## Not applicable for manual tour.
+                        angle = .05, ## Not applicable for manual tour.
+                        scale_to = c("data", NULL, "density")
                         ## Class/classification for method default values?
 ){
   if(is.null(data) == TRUE)
     data <- attr(basis_array, "data") ## Can be NULL
   if(any(class(basis_array) %in% c("matrix", "data.frame"))) ## Format for array2df (_list)
-    basis_array <- array(as.matrix(basis_array), dim = c(dim(basis_array), 1))
-  
-  
+    basis_array <- array(as.matrix(basis_array), dim = c(dim(basis_array), 1L))
   
   ## array2df_version2(), approximately
   manip_var <- attr(basis_array, "manip_var") ## NULL if not a manual tour
@@ -17,10 +16,25 @@ ggplot_tour <- function(basis_array, data = NULL,
   df_basis <- df_ls$basis_frames
   df_data  <- df_ls$data_frames
   attr(df_basis, "manip_var") <- manip_var ## NULL if not a manual tour
-
+  
+  ## Set scale_to to df_data else unit box, for spinifex::scale_axes(to = .scale_to)
+  scale_to <- match.arg(scale_to)
+  if(is.null(scale_to) == FALSE){
+    scale_to <- switch(scale_to,
+                       data = df_data,
+                       density = {
+                         .den <- density(df_data[, 1L])
+                         density = data.frame(x = quantile(df_data[, 1L], 
+                                                           probs = c(.05, .95)),
+                                              y = 3 * range(.den[[2L]]))
+                       })
+  } else ## is .scale to is NULL
+    scale_to <- data.frame(x = c(-1L, 1L), y = c(-1L, 1L))
+  
   ## Assign hidden prepared dataframes
   assign(x = ".spinifex_df_basis", value = df_basis, envir = globalenv())
   assign(x = ".spinifex_df_data",  value = df_data,  envir = globalenv())
+  assign(x = ".spinifex_scale_to", value = scale_to,  envir = globalenv())
   
   ## Also behave as ggpot() with overwritable theme settings
   ret <- ggplot2::ggplot() + spinifex::theme_spinifex()
@@ -46,28 +60,13 @@ print.ggtour <- function (x, ...){
   ## Initialization, littering hidden objects 1 level up, not in global.
   .df_basis <<- .spinifex_df_basis ## Give alterable local copies of _basis and _data
   .df_data  <<- .spinifex_df_data
+  .scale_to <<- .spinifex_scale_to
   .n_frames <<- length(unique(.df_basis$frame))
   .p <<- nrow(.df_basis) / .n_frames
   .n <<- nrow(.df_data)  / .n_frames
   .manip_var <<- attr(.df_basis, "manip_var") ## NULL if not a manual tour
-  ## Set .scale_to to df_data else unit box, for spinifex::scale_axes(to = .scale_to)
-  if(is.null(.df_data) == FALSE){
-    .scale_to <<- .df_data
-  }else{
-    .scale_to <<- data.frame(x = c(-1L, 1L), y = c(-1L, 1L))
-  }
   
-  ## For some reason not working, too many levels and
-  # ## Replicate arg lists across frame if needed
-  # if(exists("aes_args") == TRUE){
-  #   .tgt_len <- nrow(.df_data)
-  #   .aes_args <<- lapply_rep_len(aes_args, nrow_array = .tgt_len, nrow_data = .n)
-  # }
-  # if(exists("identity_args") == TRUE){
-  #   .tgt_len <- nrow(.df_data)
-  #   identity_args <<- lapply_rep_len(identity_args, nrow_array = .tgt_len, nrow_data = .n)
-  # }
-  
+  ## For some reason  cannot replicate ls args here; not working, too many levels/envirnments?
   return()
 }
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
@@ -181,10 +180,11 @@ ggproto_data_background <- function(zero_mark = TRUE,
 }
 
 lapply_rep_len <- function(list, nrow_array, nrow_data){
+  .nms <- names(list)
   .mute <- lapply(seq_along(list), function(i){
     .this_vector <- list[[i]]
     if(length(.this_vector) %in% c(1L, nrow_data) == FALSE)
-      warning(paste0("aes_arg '", .aes_arg_nms[i], "' not of length 1 or data."))
+      warning(paste0("aes_arg '", .nms[i], "' not of length 1 or data."))
     .replicated_vector <- rep_len(.this_vector, nrow_array)
     list[[i]] <<- .replicated_vector ## Replace the value with the string of the orig
   })
@@ -216,17 +216,13 @@ ggproto_data_points <- function(aes_args = list(),
   aes_args <- lapply_rep_len(aes_args, nrow_array = .tgt_len, nrow_data = .n)
   identity_args <- lapply_rep_len(identity_args, nrow_array = .tgt_len, nrow_data = .n)
   
-  
   ## do.call aes() over the aes_args
   .aes_func <- function(...)
     ggplot2::aes(x = x, y = y, frame = frame, ...)
   .aes_call <- do.call(.aes_func, aes_args)
   ## do.call geom_point() over the identity_args
-  .geom_func <- function(...){
-    suppressWarnings(
-      ggplot2::geom_point(mapping = .aes_call, data = .df_data, ...)
-    )
-  }
+  .geom_func <- function(...) suppressWarnings(
+    ggplot2::geom_point(mapping = .aes_call, data = .df_data, ...))
   .geom_call <- do.call(.geom_func, identity_args)
   
   ## Return ggproto of projection points
@@ -234,18 +230,22 @@ ggproto_data_points <- function(aes_args = list(),
 }
 
 #' @examples
-#' dat <- scale_sd(mtcars)
+#' dat <- scale_sd(tourr::flea[, 1:6])
+#' clas <- tourr::flea$species
 #' bas <- basis_pca(dat)
 #' gt_array <- save_history(dat, grand_tour(), max = 3, start = bas)
 #' 
-#' gg <- ggplot_tour(gt_array, dat) +
+#' tictoc::tic("gg assign")
+#' gg <- ggplot_tour(gt_array, dat, scale_to = "density") +
 #'   ggproto_basis_axes() +
-#'   ggproto_data_points() +
-#'   ggproto_data_histrug()
+#'   ggproto_data_density1d_rug(aes_args = list(color = clas, fill = clas))
+#' tictoc::toc()
 #' 
-#' animate_gganimate(gg)
-ggproto_data_histrug <- function(aes_args = list(),
-                                 identity_args = list()){
+#' tictoc::tic("animate")
+#' animate_gganimate(gg) ## ~48 seconds 
+#' tictoc::toc()
+ggproto_data_density1d_rug <- function(aes_args = list(),
+                                       identity_args = list()){
   ## Assumptions
   if(is.null(.spinifex_df_data) == TRUE) return()
   position <- "center" ## Data assumed center.
@@ -254,6 +254,9 @@ ggproto_data_histrug <- function(aes_args = list(),
   
   ## Initialize, inc replicating arg lists.
   .init_ggproto()
+  ## Calculate a new scale value of the density 
+  
+  ## Rep ls of args
   .tgt_len <- nrow(.df_data)
   aes_args <- lapply_rep_len(aes_args, nrow_array = .tgt_len, nrow_data = .n)
   identity_args <- lapply_rep_len(identity_args, nrow_array = .tgt_len, nrow_data = .n)
@@ -263,12 +266,12 @@ ggproto_data_histrug <- function(aes_args = list(),
     ggplot2::aes(x = x, frame = frame, ...)
   .aes_call <- do.call(.aes_func, aes_args)
   ## do.call geom over identity_args
-  .geom_func1 <- function(...)
-    suppressWarnings(ggplot2::geom_histogram(mapping = .aes_call, data = .df_data, ...))
+  .geom_func1 <- function(...) suppressWarnings(ggplot2::geom_density(
+    mapping = .aes_call, data = .df_data, position = "stack", ...))
   .geom_call1 <- do.call(.geom_func1, identity_args)
   ## do.call geom over identity_args #2:
-  .geom_func2 <- function(...)
-    suppressWarnings(ggplot2::geom_rug(mapping = .aes_call, data = .df_data, ...))
+  .geom_func2 <- function(...) suppressWarnings(ggplot2::geom_rug(
+    mapping = .aes_call, data = .df_data, ...))
   .geom_call2 <- do.call(.geom_func2, identity_args)
   
   ## Return ggproto of projection points
@@ -379,7 +382,7 @@ if(interactive()){
 
 ## TESTING GGPLOT RETURN BEFORE ANIM
 if(F) ?render_gganimate
-#' @examples 
+#' @examples
 #' dat <- scale_sd(::flea[, 1:6])
 #' clas <- flea[, 7]
 #' bas <- basis_pca(dat)
@@ -428,7 +431,7 @@ animate_gganimate <- function(
 }
 
 if(F) ?render_plotly
-#' @examples 
+#' @examples
 #' dat <- scale_sd(::flea[, 1:6])
 #' clas <- flea[, 7]
 #' bas <- basis_pca(dat)
