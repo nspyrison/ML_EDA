@@ -46,10 +46,12 @@ require("tourr")
 require("ggplot2")
 ## Especially, see basis_cheem() and view_cheem()
 source("./apps/poc/trees_of_cheem.r")
+if(F)
+  file.edit("./apps/poc/trees_of_cheem.r")
 ## New spinifex ggproto_* api
 source("./apps/poc/spinifex_ggproto.r")
 if(F)
-  file.edit("./apps/poc/trees_of_cheem.r")
+  file.edit("./apps/poc/spinifex_ggproto.r")
 ```
 
 ## Data setup
@@ -72,49 +74,51 @@ bas_cheem <- basis_cheem(
   class = clas,
   parts_type = "shap",
   basis_type = NULL)
+print(bas_cheem) ## 1 dim
 ```
+
+### DALEX::plot.predict_parts() symmetrically robust?
+
+In the following evaluated R chunk (see code) we permute both the output DALEX::predict_parts columns and that of the input data. Both do not change the print order (though permuting the parts order does destroy the local attribution CI.)
+
+```{r, eval=FALSE}
+.parts <- attributes(bas_cheem)$predict_parts
+plot(.parts)
+
+## Explore the variable order assyemtry; does var order matter?
+colnames(dat) ## 1) plot.predict_parts() doesn't print in variable nor ABC order.
+set.seed(1010)
+.col_shuffle <- sample(1:6, 6)
+# .parts2 <- .parts[.col_shuffle, ] ## 2) shuffling a plot.predict_parts() obj doesn't change the print order (but has destroys the CI of the values.)
+print("Shuffling the predict parts obj, obscurses the CI of the local attribution of the shap values, but not the order displayed. what if we shuffle the variables right out of the gate?")
+
+## Setup dat2, with shuffled columns:
+dat2 <- spinifex::scale_sd(tourr::flea[, .col_shuffle])
+bas_cheem2 <- basis_cheem(
+  data = dat2,
+  holdout_rownum = new_obs,
+  target_var = tgt_var,
+  class = clas,
+  parts_type = "shap",
+  basis_type = NULL)
+.parts2 <- attributes(bas_cheem2)$predict_parts
+
+require("patchwork")
+plot(.parts) + plot(.parts2)
+print("Great! robust to both the varaible order both before and after")
+```
+
 
 ## View a cheem basis
 
 ```{r}
 plot(cheem_basis = bas_cheem, show_parts = TRUE)
+# Error in names(x) <- value : 
+#   'names' attribute [3] must be the same length as the vector [2]
 
-cheem_basis = bas_cheem; show_parts = TRUE;
-oos_identity_args = list(color = "red", size = 5, shape = 8)
-
-.data_else <- attributes(cheem_basis)$data_else
-.data_oos  <- attributes(cheem_basis)$data_oos
-.class_else <- attributes(cheem_basis)$class_else
-.class_oos  <- attributes(cheem_basis)$class_oos
-.cn <- colnames(cheem_basis)
-
-  ## oos projection not done in view_frames
-  .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
-  
-  .oos_pt_func <- function(...){
-    geom_point(aes_string(x = .cn[1L], y = .cn[2L]),
-             .proj_new_obs, ...)
-  }
-  .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
-  
-  ## spinifex::view_frame(data_else)
-  gg <- view_frame(cheem_basis, data = .data_else,
-                   aes_args = list(color = .class_else, shape = .class_else),
-                   axes = "left") +
-    theme(legend.position = "off",
-          axis.title = element_text()) +
-    labs(x = .cn[1L],
-         y = .cn[2L]) +
-    .oos_pt_call
-  
-  ## Append plot(predict_parts(), by patchwork?
-  if(show_parts == TRUE){
-    require("patchwork")
-    .parts <- attributes(cheem_basis)$predict_parts
-    gg <- gg + plot(.parts, ...)
-  }
-  
-  return(gg)
+#debugonce(plot.cheem_basis)
+#debugonce(ggplot_tour) ## Error in if (n < 2) { : missing value where TRUE/FALSE needed
+debugonce(array2df) ## Error: in 1L:n_frames : NA/NaN argument)
 ```
 
 

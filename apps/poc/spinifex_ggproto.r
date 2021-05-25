@@ -4,6 +4,10 @@ ggplot_tour <- function(basis_array, data = NULL,
 ){
   if(is.null(data) == TRUE)
     data <- attr(basis_array, "data") ## Can be NULL
+  if(any(class(basis_array) %in% c("matrix", "data.frame"))) ## Format for array2df (_list)
+    basis_array <- array(as.matrix(basis_array), dim = c(dim(basis_array), 1))
+  
+  
   
   ## array2df_version2(), approximately
   manip_var <- attr(basis_array, "manip_var") ## NULL if not a manual tour
@@ -19,14 +23,7 @@ ggplot_tour <- function(basis_array, data = NULL,
   assign(x = ".spinifex_df_data",  value = df_data,  envir = globalenv())
   
   ## Also behave as ggpot() with overwritable theme settings
-  ret <- ggplot2::ggplot() +
-    ggplot2::theme_void() +
-    ggplot2::scale_color_brewer(palette = "Dark2") +
-    ggplot2::coord_fixed() +
-    ggplot2::theme(legend.position = "bottom",      ## Of plot
-                   legend.direction = "horizontal", ## With-in aesthetic
-                   legend.box = "vertical",         ## Between aesthetic
-                   legend.margin = margin())        ## Try to minimize margin.
+  ret <- ggplot2::ggplot() + spinifex::theme_spinifex()
   
   return(ret)
 }
@@ -235,6 +232,49 @@ ggproto_data_points <- function(aes_args = list(),
   ## Return ggproto of projection points
   return(.geom_call)
 }
+
+#' @examples
+#' dat <- scale_sd(mtcars)
+#' bas <- basis_pca(dat)
+#' gt_array <- save_history(dat, grand_tour(), max = 3, start = bas)
+#' 
+#' gg <- ggplot_tour(gt_array, dat) +
+#'   ggproto_basis_axes() +
+#'   ggproto_data_points() +
+#'   ggproto_data_histrug()
+#' 
+#' animate_gganimate(gg)
+ggproto_data_histrug <- function(aes_args = list(),
+                                 identity_args = list()){
+  ## Assumptions
+  if(is.null(.spinifex_df_data) == TRUE) return()
+  position <- "center" ## Data assumed center.
+  aes_args <- as.list(aes_args)
+  identity_args <- as.list(identity_args)
+  
+  ## Initialize, inc replicating arg lists.
+  .init_ggproto()
+  .tgt_len <- nrow(.df_data)
+  aes_args <- lapply_rep_len(aes_args, nrow_array = .tgt_len, nrow_data = .n)
+  identity_args <- lapply_rep_len(identity_args, nrow_array = .tgt_len, nrow_data = .n)
+  
+  ## do.call aes() over the aes_args
+  .aes_func <- function(...)
+    ggplot2::aes(x = x, frame = frame, ...)
+  .aes_call <- do.call(.aes_func, aes_args)
+  ## do.call geom over identity_args
+  .geom_func1 <- function(...)
+    suppressWarnings(ggplot2::geom_histogram(mapping = .aes_call, data = .df_data, ...))
+  .geom_call1 <- do.call(.geom_func1, identity_args)
+  ## do.call geom over identity_args #2:
+  .geom_func2 <- function(...)
+    suppressWarnings(ggplot2::geom_rug(mapping = .aes_call, data = .df_data, ...))
+  .geom_call2 <- do.call(.geom_func2, identity_args)
+  
+  ## Return ggproto of projection points
+  return(list(.geom_call1, .geom_call2))
+}
+
 
 ## Printing as points
 ggproto_data_text <- function(aes_args = list(label = as.character(1:nrow(dat))),

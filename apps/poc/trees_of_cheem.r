@@ -185,7 +185,7 @@ print.cheem_basis <- function (x, ...)
 #' 
 #' if(F)
 #'   ggsave("PoC_view_cheem.pdf", ggcheem_proj, device ="pdf", width = 6, height = 3, units="in")
-autoplot.cheem_basis <- plot.cheem_basis <- view_cheem <- function(
+view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   cheem_basis, show_parts = TRUE,
   oos_identity_args = list(color = "red", size = 5, shape = 8),
   ...){ ## Passed to plot.predict_parts()
@@ -195,34 +195,36 @@ autoplot.cheem_basis <- plot.cheem_basis <- view_cheem <- function(
   .class_oos  <- attributes(cheem_basis)$class_oos
   .cn <- colnames(cheem_basis)
   
+  ## Initialize ggplot_tour()
+  ggplot_tour(basis_array = cheem_basis, #as_history_array(cheem_basis, .data_else), 
+              data = .data_else)
+  
   ## oos projection not done in view_frames
   .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
   
-  
-  ## 2D geom_points variant:
+  ## 2D geom_point and call over oos_args:
   if(ncol(cheem_basis) == 2L){
     .oos_pt_func <- function(...)
       geom_point(aes_string(x = .cn[1L], y = .cn[2L]), .proj_new_obs, ...)
     .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
     
+    ## 2D data proto
     .ggp_data <- ggproto_data_points(
       identity_args = list(color = .class_else, shape = .class_else)) +
       .oos_pt_call
   }
   
-  ## 1D geom_hist variant:
+  ## 1D geom_hist over oos args:
   if(ncol(cheem_basis) == 1L){
     .oos_rug_func <- function(...)
       suppressWarnings(geom_rug(aes_string(x = .cn[1L]), .proj_new_obs, ...))
-    .oos_rug_call <- do.call(.oos_hist_func, oos_identity_args)
- 
+    .oos_rug_call <- do.call(.oos_rug_func, oos_identity_args)
     
-    .ggp_data <- ggproto_data_points( ##TODO THIS NEEDS TO BE A NEW ggproto_data_histrug
-      identity_args = list(color = .class_else)) +
+    ## 1D data proto
+    .ggp_data <-
+      ggproto_data_histrug(identity_args = list(color = .class_else)) +
       .oos_rug_call
-    
   }
-  
   
   ## spinifex::view_frame(data_else)
   gg <- ggplot_tour(tgt_bases, dat) +
