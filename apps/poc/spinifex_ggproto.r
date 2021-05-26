@@ -1,3 +1,11 @@
+### UTIL -----
+#' @examples
+#' dat <- scale_sd(::flea[, 1:6])
+#' bas <- basis_pca(dat)
+#' mv  <- manip_var_of(bas)
+#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
+#' ggplot_tour(mt_array, dat) ## litters .spinifex_df_basis, .spinifex_df_data, .spinifex_scale_to
+#' 
 ggplot_tour <- function(basis_array, data = NULL,
                         angle = .05, ## Not applicable for manual tour.
                         scale_to = c("data", NULL, "density")
@@ -50,6 +58,17 @@ print.ggtour <- function (x, ...){
     ggproto_data_points()
 }
 
+lapply_rep_len <- function(list, nrow_array, nrow_data){
+  .nms <- names(list)
+  .mute <- lapply(seq_along(list), function(i){
+    .this_vector <- list[[i]]
+    if(length(.this_vector) %in% c(1L, nrow_data) == FALSE)
+      warning(paste0("aes_arg '", .nms[i], "' not of length 1 or data."))
+    .replicated_vector <- rep_len(.this_vector, nrow_array)
+    list[[i]] <<- .replicated_vector ## Replace the value with the string of the orig
+  })
+  return(list)
+}
 
 ## Initialize common obj from hidden tour objects, test it's existance
 .init_ggproto <- function(){
@@ -69,6 +88,109 @@ print.ggtour <- function (x, ...){
   ## For some reason  cannot replicate ls args here; not working, too many levels/envirnments?
   return()
 }
+
+### ANIMATE ------
+
+
+#' @examples
+#' dat <- scale_sd(::flea[, 1:6])
+#' clas <- flea[, 7]
+#' bas <- basis_pca(dat)
+#' mv  <- manip_var_of(bas)
+#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
+#' lab <- as.character(1:nrow(dat))
+#' ggtour <- ggplot_tour(mt_array, dat) +
+#'   ggproto_basis_axes() +
+#'   ggproto_data_background() +
+#'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
+#'                       identity_args = list(size= 1.5, alpha = .7))
+#' 
+#' \dontrun{
+#' animate_gganimate(ggtour)
+#' 
+#' (anim <-
+#'   animate_gganimate(ggtour, fps = 10, rewind = TRUE,
+#'                     start_pause = 1, end_pause = 2))
+#' 
+#' gganimate::anim_save("my_tour.gif",
+#'                      animation = anim,
+#'                      path = "./figures")
+#' }
+animate_gganimate <- function(
+  ggtour, fps = 8L, rewind = FALSE, start_pause = 0.5, end_pause = 1L,
+  knit_pdf_anim = FALSE, ## Do ignore fps:end_pause, and route to gganimate::knit_print.gganim()?
+  ... ## Passed to gganimate::animate or gganimate::knit_print.gganim
+){
+  requireNamespace("gganimate")
+  gga <- ggtour +
+    gganimate::transition_states(frame, transition_length = 0L)
+  
+  ## Pdf animation, early return
+  if(knit_pdf_anim == TRUE){
+    pdf_anim <- knit_print.gganim(gga, ...)
+    return(pdf_anim)
+  }
+  
+  ## Normal animation, with applied options, knit_pdf_anim == FALSE
+  anim <- gganimate::animate(
+    gga, fps = fps, rewind = rewind,
+    start_pause = fps * start_pause,
+    end_pause = fps * end_pause, 
+    ...)
+  return(anim)
+}
+
+#' @examples
+#' dat <- scale_sd(::flea[, 1:6])
+#' clas <- flea[, 7]
+#' bas <- basis_pca(dat)
+#' mv  <- manip_var_of(bas)
+#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
+#' lab <- as.character(1:nrow(dat))
+#' ggtour <- ggplot_tour(mt_array, dat) +
+#'   ggproto_basis_axes() +
+#'   ggproto_data_background() +
+#'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
+#'                       identity_args = list(size= 1.5, alpha = .7))
+#' 
+#' \dontrun{
+#' animate_gganimate(ggtour)
+#' 
+#' (anim <-
+#'    animate_plotly(ggtour, fps = 10, rewind = TRUE,
+#'                   start_pause = 1, end_pause = 2))
+#'                            
+#' htmlwidgets::saveWidget(widget = anim, file = "./figures/my_tour.html",
+#'                         selfcontained = TRUE)
+#' }
+animate_plotly <- function(
+  ggtour, fps = 8L, #use_rowname_tooltip = TRUE,
+  ... ## Passed to plotly::layout.
+){
+  requireNamespace("plotly")
+  gg <- ggtour + 
+    ## to block plotly.js warning: supoort of horizontal legend;
+    #### https://github.com/plotly/plotly.js/issues/53 
+    ggplot2::theme(legend.position = "right",
+                   legend.direction = "vertical",
+                   legend.box = "horizontal")
+  ggp <- plotly::ggplotly(p = gg)
+  ggp <- plotly::animation_opts(p = ggp, frame = 1L / fps * 1000L,
+                                transition = 0L, redraw = FALSE)
+  ggp <- plotly::layout(
+    ggp,
+    showlegend = FALSE,
+    yaxis = list(showgrid = FALSE, showline = FALSE), ##  fixedrange = TRUE is a curse.
+    xaxis = list(showgrid = FALSE, showline = FALSE,
+                 scaleanchor = "y", scalaratio = 1L),
+    ...
+  )
+  ggp <- plotly::config(ggp, displayModeBar = FALSE)
+  return(ggp)
+}
+
+
+### GGRPROTO_BASIS_* ------
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
                                line_size = 1L, text_size = 5L){
   ## Assumptions
@@ -115,6 +237,63 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
     )
   )
 }
+
+
+#' @examples
+#' dat <- scale_sd(::flea[, 1:6])
+#' clas <- flea[, 7]
+#' bas <- basis_pca(dat)
+#' mv  <- manip_var_of(bas)
+#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
+#'
+#' ggplot_tour(mt_array, dat) +
+#'   ggproto_basis_axes1d()
+ggproto_basis_axes1d <- function(position = "left", manip_col = "blue",
+                                 bar_width = .1, text_size = 5L){
+  ## Assumptions
+  if(position == "off") return()
+  
+  ## Initialize
+  .init_ggproto()
+  
+  ## Aesthetics for the axes segments.
+  .axes_col <- "grey50"
+  .axes_wid <- bar_width
+  if(is.null(.manip_var) == FALSE) {
+    .axes_col <- rep("grey50", .p)
+    .axes_col[.manip_var] <- manip_col
+    .axes_col <- rep(.axes_col, .n_frames)
+    .axes_wid <- rep(bar_width, .p)
+    .axes_wid[.manip_var] <- 1.5 * bar_width
+    .axes_wid <- rep(.axes_wid, .n_frames)
+  }
+  ## Initialize data.frames, before scaling
+  .frame1 <- .df_basis[.df_basis$frame == 1L, ]
+  .df_bar      <- data.frame(x = rep_len(1L:.p, length.out = nrow(.df_basis)),
+                             y = .df_basis$x, label = .df_basis$label)
+  .df_txt      <- data.frame(x = 1L:.p, y = -1.5, label = .frame1$label)
+  .df_rect_bar <- data.frame(x = c(0L, .p), y = c(-1L, 1L))
+  .df_rect_txt <- data.frame(x = c(0L, .p), y = c(-1.5, -1L))
+  ## Scale them
+  .df_bar      <- scale_axes(.df_bar, position, .scale_to)
+  .df_txt      <- scale_axes(.df_txt, position, .scale_to)
+  .df_rect_bar <- scale_axes(.df_rect_bar, position, .scale_to)
+  .df_rect_txt <- scale_axes(.df_rect_txt, position, .scale_to)
+  
+  ## Return ggproto of basis axes in a framed barplot
+  return(list(
+    geom_rect(aes(xmin = min(x), xmax = max(x), ymin = min(y), ymax = max(y)),
+              .df_rect_bar, fill = NA, color = "grey80"),
+    geom_rect(aes(xmin = min(x), xmax = max(x), ymin = min(y), ymax = max(y)),
+              .df_rect_txt, fill = NA, color = "grey80"),
+    geom_text(aes(x, y, label=label), .df_txt, size = text_size, color = .axes_col),
+    suppressWarnings(geom_bar(aes(x, y), .df_bar, stat = "identity",
+                              color = rep.axes_col, width = .axes_wid))
+  ))
+}
+
+
+### GGPROTO_DATA_* ----
 
 ##TODO: gridlines still not lined up wit zero mark as it's powered from the extrema, not 0.
 ggproto_data_background <- function(zero_mark = TRUE,
@@ -179,17 +358,7 @@ ggproto_data_background <- function(zero_mark = TRUE,
   return(ret)
 }
 
-lapply_rep_len <- function(list, nrow_array, nrow_data){
-  .nms <- names(list)
-  .mute <- lapply(seq_along(list), function(i){
-    .this_vector <- list[[i]]
-    if(length(.this_vector) %in% c(1L, nrow_data) == FALSE)
-      warning(paste0("aes_arg '", .nms[i], "' not of length 1 or data."))
-    .replicated_vector <- rep_len(.this_vector, nrow_array)
-    list[[i]] <<- .replicated_vector ## Replace the value with the string of the orig
-  })
-  return(list)
-}
+
 
 #' @examples
 #' dat <- scale_sd(mtcars)
@@ -380,102 +549,4 @@ if(interactive()){
 #'                       identity_args = list(size= 1.5, alpha = .7)) +
 #'   ggproto_data_text()
 
-## TESTING GGPLOT RETURN BEFORE ANIM
-if(F) ?render_gganimate
-#' @examples
-#' dat <- scale_sd(::flea[, 1:6])
-#' clas <- flea[, 7]
-#' bas <- basis_pca(dat)
-#' mv  <- manip_var_of(bas)
-#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
-#' lab <- as.character(1:nrow(dat))
-#' ggtour <- ggplot_tour(mt_array, dat) +
-#'   ggproto_basis_axes() +
-#'   ggproto_data_background() +
-#'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
-#'                       identity_args = list(size= 1.5, alpha = .7))
-#' 
-#' \dontrun{
-#' animate_gganimate(ggtour)
-#' 
-#' (anim <-
-#'   animate_gganimate(ggtour, fps = 10, rewind = TRUE,
-#'                     start_pause = 1, end_pause = 2))
-#' 
-#' gganimate::anim_save("my_tour.gif",
-#'                      animation = anim,
-#'                      path = "./figures")
-#' }
-animate_gganimate <- function(
-  ggtour, fps = 8L, rewind = FALSE, start_pause = 0.5, end_pause = 1L,
-  knit_pdf_anim = FALSE, ## Do ignore fps:end_pause, and route to gganimate::knit_print.gganim()?
-  ... ## Passed to gganimate::animate or gganimate::knit_print.gganim
-  ){
-  requireNamespace("gganimate")
-  gga <- ggtour +
-    gganimate::transition_states(frame, transition_length = 0L)
-  
-  ## Pdf animation, early return
-  if(knit_pdf_anim == TRUE){
-    pdf_anim <- knit_print.gganim(gga, ...)
-    return(pdf_anim)
-  }
-  
-  ## Normal animation, with applied options, knit_pdf_anim == FALSE
-  anim <- gganimate::animate(
-    gga, fps = fps, rewind = rewind,
-    start_pause = fps * start_pause,
-    end_pause = fps * end_pause, 
-    ...)
-  return(anim)
-}
 
-if(F) ?render_plotly
-#' @examples
-#' dat <- scale_sd(::flea[, 1:6])
-#' clas <- flea[, 7]
-#' bas <- basis_pca(dat)
-#' mv  <- manip_var_of(bas)
-#' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
-#' lab <- as.character(1:nrow(dat))
-#' ggtour <- ggplot_tour(mt_array, dat) +
-#'   ggproto_basis_axes() +
-#'   ggproto_data_background() +
-#'   ggproto_data_points(aes_args = list(color = clas, shape = clas),
-#'                       identity_args = list(size= 1.5, alpha = .7))
-#' 
-#' \dontrun{
-#' animate_gganimate(ggtour)
-#' 
-#' (anim <-
-#'    animate_plotly(ggtour, fps = 10, rewind = TRUE,
-#'                   start_pause = 1, end_pause = 2))
-#'                            
-#' htmlwidgets::saveWidget(widget = anim, file = "./figures/my_tour.html",
-#'                         selfcontained = TRUE)
-#' }
-animate_plotly <- function(
-  ggtour, fps = 8L, #use_rowname_tooltip = TRUE,
-  ... ## Passed to plotly::layout.
-){
-  requireNamespace("plotly")
-  gg <- ggtour + 
-    ## to block plotly.js warning: supoort of horizontal legend;
-    #### https://github.com/plotly/plotly.js/issues/53 
-  ggplot2::theme(legend.position = "right",
-                 legend.direction = "vertical",
-                 legend.box = "horizontal")
-  ggp <- plotly::ggplotly(p = gg)
-  ggp <- plotly::animation_opts(p = ggp, frame = 1L / fps * 1000L,
-                                transition = 0L, redraw = FALSE)
-  ggp <- plotly::layout(
-    ggp,
-    showlegend = FALSE,
-    yaxis = list(showgrid = FALSE, showline = FALSE), ##  fixedrange = TRUE is a curse.
-    xaxis = list(showgrid = FALSE, showline = FALSE,
-                 scaleanchor = "y", scalaratio = 1L),
-    ...
-  )
-  ggp <- plotly::config(ggp, displayModeBar = FALSE)
-  return(ggp)
-}
