@@ -240,8 +240,8 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
 
 
 #' @examples
-#' dat <- scale_sd(::flea[, 1:6])
-#' clas <- flea[, 7]
+#' dat <- scale_sd(tourr::flea[, 1:6])
+#' clas <- tourr::flea[, 7]
 #' bas <- basis_pca(dat)
 #' mv  <- manip_var_of(bas)
 #' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
@@ -255,46 +255,49 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
 #' ## Error in -data$group : invalid argument to unary operator
 #' animate_gganimate(ggt)
 ggproto_basis_axes1d <- function(position = "left", manip_col = "blue",
-                                 bar_width = .1, text_size = 5L){
+                                 segment_size = 2L, text_size = 5L){
   ## Assumptions
   if(position == "off") return()
   
   ## Initialize
   .init_ggproto()
   
-  ## Aesthetics for the axes segments.
+  ## Aesthetics for the axes segments
   .axes_col <- "grey50"
-  .axes_wid <- bar_width
-  if(is.null(.manip_var) == FALSE){
+  .axes_siz <- segment_size
+  if(is.null(.manip_var) == FALSE) {
     .axes_col <- rep("grey50", .p)
     .axes_col[.manip_var] <- manip_col
-    .axes_wid <- rep(bar_width, .p)
-    .axes_wid[.manip_var] <- 1.5 * bar_width
+    .axes_siz <- rep(segment_size, .p)
+    .axes_siz[.manip_var] <- 1.5 * segment_size
   }
   ## Initialize data.frames, before scaling
-  .frame1 <- .df_basis[.df_basis$frame == 1L, ]
-  .df_bar      <- data.frame(x = rep_len(1L:.p, length.out = nrow(.df_basis)),
-                             y = .df_basis$x, 
-                             label = .df_basis$label, frame = .df_basis$frame)
-  .df_txt      <- data.frame(x = 1L:.p, y = -1.5, label = .frame1$label)
-  .df_rect_bar <- data.frame(x = c(.5, .p + .5), y = c(-1L, 1L))
-  .df_rect_txt <- data.frame(x = c(.5, .p + .5), y = c(-2L, 0L))
+  .frame1  <- .df_basis[.df_basis$frame == 1L, ]
+  .df_zero <- data.frame(x = 0L, y = 0L)
+  .df_seg  <- data.frame(x = .df_basis$x,
+                         y = rep_len(.p:1L, length.out = nrow(.df_basis)),
+                         frame = .df_basis$frame,
+                         label = .df_basis$label)
+  .df_txt  <- data.frame(x = -1.33, y = .p:1L, label = .frame1$label)
+  .df_rect <- data.frame(x = c(-1L, 1L), y = c(.5, .p + .5))
+  .df_seg0 <- data.frame(x = 0L, y = c(.5, .p + .5))
   ## Scale them
-  .df_bar      <- scale_axes(.df_bar, position, .scale_to)
-  .df_txt      <- scale_axes(.df_txt, position, .scale_to)
-  .df_rect_bar <- scale_axes(.df_rect_bar, position, .scale_to)
-  .df_rect_txt <- scale_axes(.df_rect_txt, position, .scale_to)
-
-  ## Return ggproto of basis axes in a framed barplot
+  .df_zero <- scale_axes(.df_zero, position, .scale_to)
+  .df_seg  <- scale_axes(.df_seg, position, .scale_to)
+  .df_txt  <- scale_axes(.df_txt, position, .scale_to)
+  .df_rect <- scale_axes(.df_rect, position, .scale_to)
+  .df_seg0 <- scale_axes(.df_seg0, position, .scale_to)
+  
+  ## Return ggproto of basis axes in barplot table
   return(list(
+    geom_segment(aes(x = min(x), y = min(y), xend = max(x), yend = max(y)),
+                 .df_seg0, color = "grey80", linetype = 2L),
     geom_rect(aes(xmin = min(x), xmax = max(x), ymin = min(y), ymax = max(y)),
-              .df_rect_bar, fill = NA, color = "grey80"),
-    geom_rect(aes(xmin = min(x), xmax = max(x), ymin = min(y), ymax = max(y)),
-              .df_rect_txt, fill = NA, color = "grey80", linetype = 2L),
+              .df_rect, fill = NA, color = "grey60"),
     geom_text(aes(x, y, label = label), .df_txt, size = text_size, color = .axes_col),
-    suppressWarnings(geom_bar(aes(x, y, frame = frame), .df_bar, stat = "identity",
-                              color = rep(.axes_col, .n_frames),
-                              width = rep(.axes_wid, .n_frames)))
+    suppressWarnings(geom_segment(
+      aes(x, y, xend = .df_zero[,1L], yend = y, frame = frame),
+      .df_seg, color = rep(.axes_col, .n_frames), size = rep(.axes_siz, .n_frames)))
   ))
 }
 
