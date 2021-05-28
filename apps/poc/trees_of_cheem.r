@@ -188,8 +188,8 @@ print.cheem_basis <- function (x, ...)
 view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   cheem_basis, show_parts = TRUE,
   new_obs_identity_args =
-    ifelse(ncol(cheem_basis) >= 2L,
-           list(color = "red", size = 5L, shape = 8L),
+    ifelse(ncol(cheem_basis) >= 2,
+           list(color = "red", size = 5, shape = 8),
            list(color = "red", length = unit(0.06, "npc"), sides = "b")),
   ...){ ## Passed to plot.predict_parts()
   .data_else <- attributes(cheem_basis)$data_else

@@ -119,7 +119,7 @@ lapply_rep_len <- function(list, nrow_array, nrow_data){
 #'                      path = "./figures")
 #' }
 animate_gganimate <- function(
-  ggtour, fps = 8L, rewind = FALSE, start_pause = 0.5, end_pause = 1L,
+  ggtour, fps = 8, rewind = FALSE, start_pause = 0.5, end_pause = 1,
   knit_pdf_anim = FALSE, ## Do ignore fps:end_pause, and route to gganimate::knit_print.gganim()?
   ... ## Passed to gganimate::animate or gganimate::knit_print.gganim
 ){
@@ -166,7 +166,7 @@ animate_gganimate <- function(
 #'                         selfcontained = TRUE)
 #' }
 animate_plotly <- function(
-  ggtour, fps = 8L, #use_rowname_tooltip = TRUE,
+  ggtour, fps = 8, #use_rowname_tooltip = TRUE,
   ... ## Passed to plotly::layout.
 ){
   requireNamespace("plotly")
@@ -194,7 +194,7 @@ animate_plotly <- function(
 
 ### GGRPROTO_BASIS_* ------
 ggproto_basis_axes <- function(position = "left", manip_col = "blue",
-                               line_size = 1L, text_size = 5L){
+                               line_size = 1, text_size = 5){
   ## Assumptions
   if(position == "off") return()
   
@@ -257,7 +257,7 @@ ggproto_basis_axes <- function(position = "left", manip_col = "blue",
 #' ## Error in -data$group : invalid argument to unary operator
 #' animate_gganimate(ggt)
 ggproto_basis_axes1d <- function(position = "left", manip_col = "blue",
-                                 segment_size = 2L, text_size = 5L){
+                                 segment_size = 2, text_size = 5){
   ## Assumptions
   if(position == "off") return()
   
