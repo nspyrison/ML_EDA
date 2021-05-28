@@ -69,14 +69,14 @@ basis_cheem <- function(
   ## Initialize held out observation for data, target var, optional class var
   data_oos  <- data[holdout_rownum,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
   data_else <- data[-holdout_rownum, ]
-  target_var_oos   <- target_var[holdout_rownum]
+  target_var_oos  <- target_var[holdout_rownum]
   target_var_else <- target_var[-holdout_rownum]
 
   ## If class is used
   class_oos <- class_else <- NULL ## Initialize
   if(is.null(class) == FALSE){
     class <- as.factor(class)
-    class_oos   <- class[holdout_rownum]
+    class_oos  <- class[holdout_rownum]
     class_else <- class[-holdout_rownum]
   }else{
     ## If class is null, enforce correct basis functions
@@ -100,10 +100,11 @@ basis_cheem <- function(
   
   #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
   parts_type <- match.arg(parts_type)
-  .ex_rf <- DALEX::explain(model = .rf,
-                           data = data_else,
-                           y = target_var_else,
-                           label = paste0(parts_type, " local attribution of random forest model"))
+  .ex_rf <- DALEX::explain(
+    model = .rf,
+    data = data_else,
+    y = target_var_else,
+    label = paste0(parts_type, " local attribution of random forest model"))
   .parts <- DALEX::predict_parts(explainer = .ex_rf, ## ~ 10 s @ B=25
                                  new_observation = data_oos,
                                  type = parts_type,
@@ -157,8 +158,7 @@ basis_cheem <- function(
 }
 
 ## Print cheem_bases as a numeric matrix without showing all the attributes.
-print.cheem_basis <- function (x, ...)
-{
+print.cheem_basis <- function (x, ...){
   attr(x, "data_else") <- NULL
   attr(x, "data_oos")  <- NULL
   attr(x, "class_else") <- NULL
@@ -225,7 +225,6 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
         aes_string(x = .cn[1L], frame = frame), .proj_new_obs, ...))
     .oos_rug_call <- do.call(.oos_rug_func, oos_identity_args)
     
-    browser()
     .ggp_data <- ggproto_data_density1d_rug(
       identity_args = list(color = .class_else, fill = .class_else)) +
       ggproto_basis_axes1d() +
@@ -250,13 +249,19 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   return(gg)
 }
 
-
+#' @examples
+#' ## Discrete supervised classification RF
+#' dat <- spinifex::scale_sd(flea[, 1:6])
+#' tgt_var <- flea$species
+#' 
+#' la_mat <- local_attribution_matrix(dat, tgt_var)
+#' GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
 local_attribution_matrix <- function(
-  data, target_var, class = NULL,
+  data, target_var,
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
-  basis_type = c("RF_importance", "pca", "olda", "odp", "onpp", NULL),
+  do_normalize_obs = TRUE,
   keep_large_intermediates = FALSE,
   ...){
   ## Assumptions
@@ -267,49 +272,34 @@ local_attribution_matrix <- function(
   
   ## Initialize
   parts_type <- match.arg(parts_type)
-  ## Class condition handling
-  class_oos <- class_else <- NULL
-  if(is.null(class) == FALSE){
-    class <- as.factor(class)
-    class_oos  <- class[holdout_rownum]
-    class_else <- class[-holdout_rownum]
-  }else{
-    ## If class is null, enforce correct basis functions
-    if(is.null(basis_type) == FALSE){
-      basis_type <- match.arg(basis_type)
-      if(basis_type %in% c("olda", "odp"))
-        stop(paste0("basis_type ", basis_type, " requires the 'class' argument."))
-    }
-  }
-  
-  #### Random forest, FULL DATA, no holdout
   .p <- ncol(data)
   .n <- nrow(data)
-  ## Discrete wants mtry = sqrt(p), continuous wants mtry = p/3
-  .RF_mtry <- if(is.discrete(target_var_else)) sqrt(.p) else .p / 3L
-  .do_clac_imp <- FALSE ## Initialize
-  if(!is.null(basis_type)) if(basis_type == "RF_importance") .do_clac_imp <- TRUE
-  .rf <- randomForest::randomForest(target_var_else~.,
-                                    data = data.frame(target_var_else, data_else),
-                                    mtry = .RF_mtry,
-                                    importance = .do_clac_imp)
   
-  
-  ## Given a full obs model, iterate each observation,
-  ## Create parts (of explain(RF), rebuilding a [n, p] local attribution matrix
+  #### Iterating over each each observation:
   ret <- matrix(NA, nrow = .n, ncol = .p)
   .mute <- sapply(1L:nrow(data), function(i){
     ## Initialize held out observation for data, target var, optional class var
     .data_oos  <- data[i,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
     .data_else <- data[-i, ]
-    .target_var_oos  <- target_var[i]
-    .target_var_else <- target_var[-i]
+    if(is.discrete(target_var)){
+      .target_var_else <- target_var[-i] == target_var[i]
+      .RF_mtry <- sqrt(.p)
+    }else{ ## target_var_else is continuous
+      .target_var_else <- target_var[-i]
+      .RF_mtry <- .p / 3L
+    }
+    
+    #### Random forest, of hold one out data
+    .rf <- randomForest::randomForest(.target_var_else~.,
+                                      data = data.frame(.target_var_else, .data_else),
+                                      mtry = .RF_mtry)
     
     #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
-    .ex_rf <- DALEX::explain(model = .rf,
-                             data = .data_else,
-                             y = .target_var_else,
-                             label = paste0(parts_type, " local attribution of random forest model"))
+    .ex_rf <- DALEX::explain(
+      model = .rf,
+      data = .data_else,
+      y = .target_var_else,
+      label = paste0(parts_type, " local attribution of random forest model"))
     .parts <- DALEX::predict_parts(explainer = .ex_rf,
                                    new_observation = .data_oos,
                                    type = parts_type,
@@ -324,18 +314,19 @@ local_attribution_matrix <- function(
     .row_idx <- order(match(.scree_la$variable_name, colnames(data)))
     .scree_la <- .scree_la[.row_idx, ]
     
-    ## single obs of Local attribution matrix
-    ret[i,] <<- t(as.matrix(tourr::normalise(.scree_la$median_local_attr)))
+    ## Single obs of local attribution matrix
+    .obs_local_attr <- .scree_la$median_local_attr
+    if(do_normalize_obs == TRUE)
+      .obs_local_attr <- tourr::normalise(.obs_local_attr)
+    
+    ## Assign to return row
+    ret[i,] <<- t(as.matrix(.obs_local_attr))
   })
   .rn <- rownames(data)
-  .rn <- ifelse(is.null(.rn) == TRUE, 1L:.n, .rn)
+  if(is.null(.rn) == TRUE) .rn <- 1L:.n
   rownames(ret) <- paste0(parts_type, " of ", .rn)
   colnames(ret) <- colnames(data)
-  
-  ## Keep attributes
-  attr(ret, "class") <- c("cheem_basis", "matrix")
-  if(keep_large_intermediates == TRUE)
-    attr(ret, "randomForest") <- .rf
+  attr(ret, "class") <- c("local_attribution_matrix", "matrix")
   
   ## Return
   return(ret)

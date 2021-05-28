@@ -1,5 +1,5 @@
 ---
-title: "Trees of Cheem"
+title: "Trees of Cheem 1D"
 author: "Nicholas Spyrison"
 date: "`r Sys.Date()`"
 output:
@@ -34,24 +34,24 @@ knitr::opts_chunk$set(
 knitr::opts_knit$set(root.dir = '..')
 ```
 
-# Intro to trees of cheem
+# Trees of Cheem 1D
 
 ## Requirements
 
 ```{R}
 require("DALEX")
-#require("treeshap")
+#require("treeshap") ## Needed?
 require("spinifex")
 require("tourr")
 require("ggplot2")
-## Especially, see basis_cheem() and view_cheem()
-source("./apps/poc/trees_of_cheem.r")
-if(F)
+## Local functions
+source("./apps/poc/trees_of_cheem.r") ## Cheem functions
+source("./apps/poc/spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+## Not run, open local function files
+if(F){
   file.edit("./apps/poc/trees_of_cheem.r")
-## New spinifex ggproto_* api
-source("./apps/poc/spinifex_ggproto.r")
-if(F)
   file.edit("./apps/poc/spinifex_ggproto.r")
+}
 ```
 
 ## Data setup
@@ -113,12 +113,9 @@ print("Great! robust to both the varaible order both before and after")
 
 ```{r}
 plot(cheem_basis = bas_cheem, show_parts = TRUE)
-# Error in names(x) <- value : 
-#   'names' attribute [3] must be the same length as the vector [2]
-
-#debugonce(plot.cheem_basis)
-#debugonce(ggplot_tour) ## Error in if (n < 2) { : missing value where TRUE/FALSE needed
-debugonce(array2df) ## Error: in 1L:n_frames : NA/NaN argument)
+# LAST ERROR:
+# Error in ggproto_data_density1d_rug(identity_args = list(color = .class_else,  : 
+#   non-numeric argument to binary operator
 ```
 
 

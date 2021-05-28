@@ -21,7 +21,7 @@ ggplot_tour <- function(basis_array, data = NULL,
   #### all of the down-stream functions assume this behaviour.
   manip_var <- attr(basis_array, "manip_var") ## NULL if not a manual tour
   if(is.null(manip_var)) ## If not a manual tour interpolate
-    basis_array <- tourr::interpolate(basis_array, angle = angle)
+    capture.output(basis_array <- tourr::interpolate(basis_array, angle = angle))
   df_ls <- array2df(basis_array, data)
   df_basis <- df_ls$basis_frames
   df_data  <- df_ls$data_frames
