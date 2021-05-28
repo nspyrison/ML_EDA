@@ -187,10 +187,9 @@ print.cheem_basis <- function (x, ...)
 #'   ggsave("PoC_view_cheem.pdf", ggcheem_proj, device ="pdf", width = 6, height = 3, units="in")
 view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   cheem_basis, show_parts = TRUE,
-  new_obs_identity_args =
-    ifelse(ncol(cheem_basis) >= 2,
-           list(color = "red", size = 5, shape = 8),
-           list(color = "red", length = unit(0.06, "npc"), sides = "b")),
+  oos_identity_args =
+    if(ncol(cheem_basis) >= 2){list(color = "red", size = 5, shape = 8)}else
+      list(color = "red", length = unit(0.06, "npc"), sides = "b"),
   ...){ ## Passed to plot.predict_parts()
   .data_else <- attributes(cheem_basis)$data_else
   .data_oos  <- attributes(cheem_basis)$data_oos
@@ -199,8 +198,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   .cn <- colnames(cheem_basis)
   
   ## Initialize ggplot_tour()
-  ggplot_tour(basis_array = cheem_basis, #as_history_array(cheem_basis, .data_else), 
-              data = .data_else)
+  gg <- ggplot_tour(basis_array = cheem_basis,data = .data_else)
   
   ## oos projection not done in view_frames
   .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
@@ -208,35 +206,39 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   ## 2D geom_point and call over oos_args:
   if(ncol(cheem_basis) == 2L){
     .oos_pt_func <- function(...)
-      geom_point(aes_string(x = .cn[1L], y = .cn[2L], frame = frame),
-                 .proj_new_obs, ...)
-    .oos_pt_call <- do.call(.oos_pt_func, new_obs_identity_args)
+      suppressWarnings(geom_point(
+        aes_string(x = .cn[1L], y = .cn[2L], frame = frame), .proj_new_obs, ...))
+    .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
     
-    ## 2D data proto
+    ## 2D data ggproto
     .ggp_data <- ggproto_data_points(
       identity_args = list(color = .class_else, shape = .class_else)) +
+      ggproto_basis_axes() +
+      labs(x = .cn[1L], y = .cn[2L]) +
       .oos_pt_call
   }
   
   ## 1D geom_hist over oos args:
   if(ncol(cheem_basis) == 1L){
     .oos_rug_func <- function(...)
-      geom_rug(aes_string(x = .cn[1L]), .proj_new_obs, ...)
-    .oos_pt_call <- do.call(.oos_pt_func, new_obs_identity_args)
+      suppressWarnings(geom_rug(
+        aes_string(x = .cn[1L], frame = frame), .proj_new_obs, ...))
+    .oos_rug_call <- do.call(.oos_rug_func, oos_identity_args)
     
-    ggproto_data_density1d_rug(identity_args = list(color = .class_else, fill = .class_else)) +
+    browser()
+    .ggp_data <- ggproto_data_density1d_rug(
+      identity_args = list(color = .class_else, fill = .class_else)) +
+      ggproto_basis_axes1d() +
+      labs(x = .cn[1L]) +
       .oos_rug_call
   }
   
   ## spinifex::view_frame(data_else)
-  gg <- ggplot_tour(tgt_bases, dat) +
-    ggproto_basis_axes() +
+  gg <- gg +
     ggproto_data_background(gridlines = FALSE) +
     .ggp_data +
     theme(legend.position = "off",
-          axis.title = element_text()) +
-    labs(x = .cn[1L],
-         y = .cn[2L])
+          axis.title = element_text())
   
   ## Plot(predict_parts(), by patchwork?
   if(show_parts == TRUE){
@@ -252,7 +254,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
 ### EMA paper examples, recreating source ----
 #' @examples 
 #' ## Working form source examples:
-#' if(F) ## Working from: 
+#' if(F) ## Working from:
 #'   browseURL("http://ema.drwhy.ai/shapley.html#SHAPRcode")
 #' 
 #' titanic_imputed <- archivist::aread("pbiecek/models/27e5c")

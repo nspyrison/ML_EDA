@@ -17,6 +17,8 @@ ggplot_tour <- function(basis_array, data = NULL,
     basis_array <- array(as.matrix(basis_array), dim = c(dim(basis_array), 1L))
   
   ## array2df_version2(), approximately
+  #### what is different? why not in spinifex directly? 
+  #### all of the down-stream functions assume this behaviour.
   manip_var <- attr(basis_array, "manip_var") ## NULL if not a manual tour
   if(is.null(manip_var)) ## If not a manual tour interpolate
     basis_array <- tourr::interpolate(basis_array, angle = angle)
@@ -417,7 +419,6 @@ ggproto_data_points <- function(aes_args = list(),
 #' 
 #' tictoc::tic("gg assign")
 #' gg <- ggplot_tour(gt_array, dat, scale_to = "density") +
-#'   ggproto_basis_axes() +
 #'   ggproto_data_density1d_rug(aes_args = list(color = clas, fill = clas))
 #' tictoc::toc()
 #' 
@@ -447,7 +448,8 @@ ggproto_data_density1d_rug <- function(aes_args = list(),
   .aes_call <- do.call(.aes_func, aes_args)
   ## do.call geom over identity_args
   .geom_func1 <- function(...) suppressWarnings(ggplot2::geom_density(
-    mapping = .aes_call, data = .df_data, position = "stack", ...))
+    mapping = .aes_call, data = .df_data, ...,
+    position = "stack", color = "black"))
   .geom_call1 <- do.call(.geom_func1, identity_args)
   ## do.call geom over identity_args #2:
   .geom_func2 <- function(...) suppressWarnings(ggplot2::geom_rug(
