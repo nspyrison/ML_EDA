@@ -49,14 +49,16 @@ ggplot_tour <- function(basis_array, data = NULL,
   
   return(ret)
 }
-## Print method
-print.ggtour <- function (x, ...){
-  class(x) <- c("gg", "ggplot")
-  x +
-    ggproto_basis_axes() +
-    ggproto_data_background(gridline_probs = FALSE) +
-    ggproto_data_points()
-}
+# ## Print method
+# #### Was a good idea, but ggplot stops working when you change the first class, 
+# #### and doesn't effect if you append.
+# print.ggtour <- function(x, ...){
+#   class(x) <- c("gg", "ggplot")
+#   x +
+#     ggproto_basis_axes() +
+#     ggproto_data_background(gridline_probs = FALSE) +
+#     ggproto_data_points()
+# }
 
 lapply_rep_len <- function(list, nrow_array, nrow_data){
   .nms <- names(list)
