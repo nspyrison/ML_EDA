@@ -1,0 +1,83 @@
+---
+title: "Cheem varieties"
+author: "Nicholas Spyrison"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: united
+editor_options:
+  chunk_output_type: console
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE, ## code
+  include    = TRUE, ## plots
+  eval       = TRUE, ## chunk
+  message    = FALSE,
+  warning    = FALSE,
+  error      = FALSE,
+  collapse   = TRUE,
+  cache      = TRUE,
+  cache.lazy = FALSE
+)
+## Set dir relative to package
+knitr::opts_knit$set(root.dir = '..')
+```
+
+# Initialize
+
+## Requirements
+
+```{R}
+require("DALEX")
+require("spinifex")
+require("tourr")
+require("ggplot2")
+## Local functions
+source("./apps/poc/trees_of_cheem.r") ## Cheem functions
+source("./apps/poc/spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+## Not run, open local function files
+if(F){
+  file.edit("./apps/poc/trees_of_cheem.r")
+  file.edit("./apps/poc/spinifex_ggproto.r")
+}
+```
+
+## Data setup
+
+```{R}
+str(tourr::flea) ## 74 x 6 numeric + 3 level class
+dat <- spinifex::scale_sd(tourr::flea[, 1:6])
+tgt_var <- clas <- tourr::flea$species
+```
+
+# Local attribution matrix
+
+## Extract shap values for each obs.
+
+```{r}
+tictoc::tic("local_attribution_matrix of flea")
+capture.output(la_mat <- local_attribution_matrix(dat, tgt_var))
+tictoc::toc()
+skimr::skim(la_mat)
+```
+
+## Explore visually
+
+```{r}
+gg <- GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
+plotly::ggplotly(gg)
+```
+
+We notice clumping near zero, ie many variables are often unimportant for explaining a particular variable. Keep in mind that these are normalized shap values, the obs norm must be 1.
+
+## PC space of SHAP MATRIX
+
+```{r}
+pca_obj  <- prcomp(la_mat)
+pca_proj <- pca_obj$x
+gg <- GGally::ggpairs(as.data.frame(pca_proj), mapping = aes(color = tgt_var))
+plotly::ggplotly(gg)
+```
+
