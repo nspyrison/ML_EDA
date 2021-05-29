@@ -5,21 +5,19 @@
 #' mv  <- manip_var_of(bas)
 #' mt_array <- manual_tour(bas, manip_var = mv, angle = .1)
 #' ggplot_tour(mt_array, dat) ## litters .spinifex_df_basis, .spinifex_df_data, .spinifex_scale_to
-#' 
 ggplot_tour <- function(basis_array, data = NULL,
-                        angle = .05, ## Not applicable for manual tour.
-                        scale_to = c("data", NULL, "density")
-                        ## Class/classification for method default values?
+                        angle = .05 ## Not applicable for manual tour.
+                        ## Would including a global class  var be helpful?
 ){
   if(is.null(data) == TRUE)
     data <- attr(basis_array, "data") ## Can be NULL
+  manip_var <- attr(basis_array, "manip_var") ## NULL if not a manual tour
   if(any(class(basis_array) %in% c("matrix", "data.frame"))) ## Format for array2df (_list)
     basis_array <- array(as.matrix(basis_array), dim = c(dim(basis_array), 1L))
   
   ## array2df_version2(), approximately
   #### what is different? why not in spinifex directly? 
-  #### all of the down-stream functions assume this behaviour.
-  manip_var <- attr(basis_array, "manip_var") ## NULL if not a manual tour
+  #### all of the down-stream functions assume that setup of interpolation order.
   if(is.null(manip_var)) ## If not a manual tour interpolate
     capture.output(basis_array <- tourr::interpolate(basis_array, angle = angle))
   df_ls <- array2df(basis_array, data)
@@ -27,19 +25,19 @@ ggplot_tour <- function(basis_array, data = NULL,
   df_data  <- df_ls$data_frames
   attr(df_basis, "manip_var") <- manip_var ## NULL if not a manual tour
   
-  ## Set scale_to to df_data else unit box, for spinifex::scale_axes(to = .scale_to)
-  scale_to <- match.arg(scale_to)
-  if(is.null(scale_to) == FALSE){
-    scale_to <- switch(scale_to,
-                       data = df_data,
-                       density = {
-                         .den <- density(df_data[, 1L])
-                         density = data.frame(x = quantile(df_data[, 1L], 
-                                                           probs = c(.05, .95)),
-                                              y = 3 * range(.den[[2L]]))
-                       })
-  } else ## is .scale to is NULL
+  ## scale_to condition: NULL data: unit box, >2d basis: data, 1d data: density and data.  
+  if(is.null(data)){
     scale_to <- data.frame(x = c(-1L, 1L), y = c(-1L, 1L))
+  }else{
+    d <- ncol(df_basis) - 2L
+    if(d >= 2L) scale_to <- df_data ##
+    if(d == 1L){
+      .den <- density(df_data[, 1L])
+      scale_to <- data.frame(x = quantile(df_data[, 1L], 
+                                          probs = c(.01, .99)),
+                             y = 1.8 * range(.den[[2L]]))
+    }else{stop("scale_to missing from ggplot_tour() call.")}
+  }
   
   ## Assign hidden prepared dataframes
   assign(x = ".spinifex_df_basis", value = df_basis, envir = globalenv())
@@ -66,10 +64,12 @@ lapply_rep_len <- function(list, nrow_array, nrow_data){
   .nms <- names(list)
   .mute <- lapply(seq_along(list), function(i){
     .this_vector <- list[[i]]
-    if(length(.this_vector) %in% c(1L, nrow_data) == FALSE)
-      warning(paste0("aes_arg '", .nms[i], "' not of length 1 or data."))
-    .replicated_vector <- rep_len(.this_vector, nrow_array)
-    list[[i]] <<- .replicated_vector ## Replace the value with the string of the orig
+    if(length(.this_vector) != 1L){
+      if(length(.this_vector) != nrow_data)
+        warning(paste0("aes_arg '", .nms[i], "' not of length 1 or data."))
+      .replicated_vector <- rep_len(.this_vector, nrow_array)
+      list[[i]] <<- .replicated_vector ## Replace the value with the string of the orig
+    }
   })
   return(list)
 }
@@ -125,7 +125,11 @@ animate_gganimate <- function(
   knit_pdf_anim = FALSE, ## Do ignore fps:end_pause, and route to gganimate::knit_print.gganim()?
   ... ## Passed to gganimate::animate or gganimate::knit_print.gganim
 ){
+  ## Assume
+  n_frames <- length(unique(.spinifex_df_basis$frame))
+  if(n_frames == 1L) stop("df_basis only has 1 frame, stopping animation.")
   requireNamespace("gganimate")
+  
   gga <- ggtour +
     gganimate::transition_states(frame, transition_length = 0L)
   
@@ -171,6 +175,9 @@ animate_plotly <- function(
   ggtour, fps = 8, #use_rowname_tooltip = TRUE,
   ... ## Passed to plotly::layout.
 ){
+  ## Assume
+  n_frames <- length(unique(.spinifex_df_basis$frame))
+  if(n_frames == 1L) stop("df_basis only has 1 frame, stopping animation.")
   requireNamespace("plotly")
   gg <- ggtour + 
     ## to block plotly.js warning: supoort of horizontal legend;
@@ -528,7 +535,6 @@ ggproto_data_hex <- function(bins = 30,
   ## Return ggproto
   return(.geom_call)
 }
-
 
 
 ##== TESTING ==##

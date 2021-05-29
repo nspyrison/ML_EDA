@@ -189,7 +189,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   cheem_basis, show_parts = TRUE,
   oos_identity_args =
     if(ncol(cheem_basis) >= 2){list(color = "red", size = 5, shape = 8)}else
-      list(color = "red", length = unit(0.06, "npc"), sides = "b"),
+      list(color = "red", size = 2, linetype = 2L, length = unit(0.1, "npc")),
   ...){ ## Passed to plot.predict_parts()
   .data_else <- attributes(cheem_basis)$data_else
   .data_oos  <- attributes(cheem_basis)$data_oos
@@ -207,29 +207,34 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   if(ncol(cheem_basis) == 2L){
     .oos_pt_func <- function(...)
       suppressWarnings(geom_point(
-        aes_string(x = .cn[1L], y = .cn[2L], frame = frame), .proj_new_obs, ...))
+        aes_string(x = .cn[1L], y = .cn[2L]), 
+        .proj_new_obs, ...))
+    .oos_pt_call <- .oos_pt_func(oos_identity_args)
     .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
     
     ## 2D data ggproto
-    .ggp_data <- ggproto_data_points(
-      identity_args = list(color = .class_else, shape = .class_else)) +
-      ggproto_basis_axes() +
-      labs(x = .cn[1L], y = .cn[2L]) +
+    .ggp_data <- list(ggproto_data_points(
+      aes_args = list(color = .class_else, shape = .class_else)),
+      ggproto_basis_axes(),
+      labs(x = .cn[1L], y = .cn[2L]),
       .oos_pt_call
+    )
   }
   
   ## 1D geom_hist over oos args:
   if(ncol(cheem_basis) == 1L){
     .oos_rug_func <- function(...)
       suppressWarnings(geom_rug(
-        aes_string(x = .cn[1L], frame = frame), .proj_new_obs, ...))
+        aes_string(x = .cn[1L]), .proj_new_obs, ...))
     .oos_rug_call <- do.call(.oos_rug_func, oos_identity_args)
     
-    .ggp_data <- ggproto_data_density1d_rug(
-      identity_args = list(color = .class_else, fill = .class_else)) +
-      ggproto_basis_axes1d() +
-      labs(x = .cn[1L]) +
+    ## 1D data ggproto
+    .ggp_data <- list(ggproto_data_density1d_rug(
+      aes_args = list(color = .class_else, fill = .class_else)),
+      ggproto_basis_axes1d(),
+      labs(x = .cn[1L]),
       .oos_rug_call
+    )
   }
   
   ## spinifex::view_frame(data_else)
