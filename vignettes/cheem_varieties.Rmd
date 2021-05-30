@@ -21,21 +21,27 @@ knitr::opts_chunk$set(
   cache      = TRUE,
   cache.lazy = FALSE
 )
-## Set dir relative to package
+## Set directory relative to package
 knitr::opts_knit$set(root.dir = '..')
 ```
 
-# Initialize
+# Data, DALEX::dragons
 
 ## Requirements
 
 ```{R}
+## Primary work packages
 require("DALEX")
 require("spinifex")
 require("tourr")
 require("ggplot2")
+## EDA and utility
+require("GGally")
+require("tictoc")
+require("patchwork")
+require("plotly")
 ## Local functions
-source("./apps/poc/trees_of_cheem.r") ## Cheem functions
+source("./apps/poc/trees_of_cheem.r")   ## Cheem functions
 source("./apps/poc/spinifex_ggproto.r") ## New (spinifex) ggproto_* api
 ## Not run, open local function files
 if(F){
@@ -46,38 +52,171 @@ if(F){
 
 ## Data setup
 
-```{R}
-str(tourr::flea) ## 74 x 6 numeric + 3 level class
-dat <- spinifex::scale_sd(tourr::flea[, 1:6])
-tgt_var <- clas <- tourr::flea$species
+```{r}
+raw <- DALEX::dragons
+str(raw) ## dat: 2000 x 7, clas: colour: 4 level factor
+dat <- spinifex::scale_sd(raw[, -5])
+clas <- raw[, 5]
+
+## Additional setup not used in local attribution matrix
+new_obs <- 42 ## Needed for some varieties
+tgt_var <- clas == clas[new_obs]
+clas[new_obs]
 ```
+
+## EDA
+
+```{r}
+bas_pca <- basis_pca(dat)
+bas_olda <- basis_olda(dat, clas)
+
+require("patchwork")
+view_frame(bas_pca, data = dat, 
+           aes_args = list(color = clas, shape = clas)) + 
+  ggtitle("PC1:2") +
+view_frame(bas_olda, data = dat, 
+           aes_args = list(color = clas, shape = clas)) + 
+  ggtitle("OLDA1:2")
+
+bas_olda5 <- basis_olda(dat, clas, d = 5)
+proj <- dat %*% bas_olda5
+colnames(proj) <- paste0("OLDA", 1:5)
+GGally::ggpairs(as.data.frame(proj), 
+                mapping = aes(color = clas), 
+                lower = list(continuous = wrap("points", alpha = 0.3)))
+```
+
+Not a lot of linear separability.
+
+# 1D projection of local attribution
+
+## Solve for local attribution
+
+```{r}
+bas_cheem <- basis_cheem(data = dat,
+                         holdout_rownum = new_obs,
+                         target_var = tgt_var,
+                         class = clas,
+                         parts_type = "shap",
+                         basis_type = NULL)
+print(bas_cheem) ## SHAP component; 1 normalized linear combinations of the variables.
+```
+
+
+## View the 1d projection of that attribution
+
+```{r}
+plot.cheem_basis(cheem_basis = bas_cheem, show_parts = TRUE)
+## method for plot.cheem_basis pulls some of the attributes from the cheem_basis
+#### to get oos obs, and project that with, loosely: 
+if(F){
+  ## The 1d shap projection of whole data (with oos obs)
+  ggplot_tour(bas_cheem, dat) +
+    ggproto_basis_axes1d() +
+    ggproto_data_density1d_rug(aes_args = list(color = clas, fill = clas))
+}
+```
+
+Shockingly similar between color of dragon, at least given my prior expectation.
 
 # Local attribution matrix
 
-## Extract shap values for each obs.
+## Extract local attribution matrix
+
+Create the local attribution for _every_ observation and then reconstituted back into a [n, p] matrix. This is taking way too long, so we'll take a 10% subset, running a RF model 200 times on data with dim [200, 7]. 
 
 ```{r}
-tictoc::tic("local_attribution_matrix of flea")
-capture.output(la_mat <- local_attribution_matrix(dat, tgt_var))
+.n <- nrow(dat)
+set.seed(101)
+.r_idx <- sample(1L:.n, size = .1 * .n, replace = FALSE)
+dat_sub  <- dat[.r_idx, ]
+clas_sub <- clas[.r_idx]
+  
+tictoc::tic("local_attribution_matrix")
+capture.output(la_mat <- local_attribution_matrix(dat_sub, clas_sub))
 tictoc::toc()
-skimr::skim(la_mat)
 ```
 
-## Explore visually
+## Scatterplot matrix of local attribution matrix
 
 ```{r}
-gg <- GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
-plotly::ggplotly(gg)
+GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = clas_sub),
+                lower = list(continuous = wrap("points", alpha = 0.3)))
+#plotly::ggplotly(gg)
 ```
 
-We notice clumping near zero, ie many variables are often unimportant for explaining a particular variable. Keep in mind that these are normalized shap values, the obs norm must be 1.
+We notice clumping near zero, ie many variables are often unimportant for explaining a particular variable. Keep in mind that these are normalized SHAP values, the row norm must be 1.
 
-## PC space of SHAP MATRIX
+## Scatterplot matrix of _OLDA_-space of the local attribution matrix
 
 ```{r}
-pca_obj  <- prcomp(la_mat)
-pca_proj <- pca_obj$x
-gg <- GGally::ggpairs(as.data.frame(pca_proj), mapping = aes(color = tgt_var))
-plotly::ggplotly(gg)
+bas_olda <- basis_olda(la_mat, clas_sub, d = 5)
+colnames(bas_olda) <- paste0("OLD", 1:5)
+proj_olda <- la_mat %*% bas_olda
+GGally::ggpairs(as.data.frame(proj_olda), mapping = aes(color = clas_sub),
+                lower = list(continuous = wrap("points", alpha = 0.3)))
+#plotly::ggplotly(gg)
+```
+
+
+# Side-by-side SHAP
+
+Place holder, ideas:
+
+## Model describing a discrete, rather than boolean vector
+
+## Observations at center vs edge of a class elipsoid
+
+## Courupting the class of an observation
+
+
+
+
+# Shiny app
+
+thoughts:
+
+- data: revisit fifa vignette and flow.
+- preprocessing: scale, no DR (original var needed for most interprability)
+- whats visuals wanted?
+- what interactions are interesting;
+    - having tool tip?
+    - choose the obs
+    - control parameters of the model
+- hold out last image in second plot for comparison?
+
+
+# An aside: DALEX::plot.predict_parts() symmetrically robust?: yes
+
+In short, yes.
+
+In the following evaluated R chunk (see code) we permute both the output DALEX::predict_parts columns and that of the input data. Both do not change the print order (though permuting the parts order does destroy the local attribution CI.)
+
+```{r, eval=FALSE}
+.parts <- attributes(bas_cheem)$predict_parts
+plot(.parts)
+
+## Explore the variable order assyemtry; does var order matter?
+colnames(dat) ## 1) plot.predict_parts() doesn't print in variable nor ABC order.
+set.seed(1010)
+.p <- ncol(dat)
+.col_shuffle <- sample(1:.p, .p)
+# .parts2 <- .parts[.col_shuffle, ] ## 2) shuffling a plot.predict_parts() obj doesn't change the print order (but has destroys the CI of the values.)
+print("Shuffling the predict parts obj, obscurses the CI of the local attribution of the shap values, but not the order displayed. what if we shuffle the variables right out of the gate?")
+
+## Setup dat2, with shuffled columns:
+dat2 <- dat[, .col_shuffle]
+bas_cheem2 <- basis_cheem(
+  data = dat2,
+  holdout_rownum = new_obs,
+  target_var = tgt_var,
+  class = clas,
+  parts_type = "shap",
+  basis_type = NULL)
+.parts2 <- attributes(bas_cheem2)$predict_parts
+
+require("patchwork")
+plot(.parts) + plot(.parts2)
+print("Great! robust to both the varaible order both before and after")
 ```
 

@@ -49,7 +49,7 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 #' .tgt_name <- "I. Pettersson"
 #' tgt_row <- which(row.names(dat) == .tgt_name)
 #' 
-#' basis_cheem(data = dat, holdout_rownum = tgt_row,target_var = y_var,
+#' basis_cheem(data = dat, holdout_rownum = tgt_row, target_var = y_var,
 #'             parts_type = "shap", basis_type = "pca")
 ## Previously hard coded classification target var was: class == new_observation_class
 basis_cheem <- function(
@@ -189,7 +189,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   cheem_basis, show_parts = TRUE,
   oos_identity_args =
     if(ncol(cheem_basis) >= 2){list(color = "red", size = 5, shape = 8)}else
-      list(color = "red", size = 2, linetype = 2L, length = unit(0.1, "npc")),
+      list(color = "red", size = 1.5, linetype = 2L, length = unit(1, "npc"), alpha = .5),
   ...){ ## Passed to plot.predict_parts()
   .data_else <- attributes(cheem_basis)$data_else
   .data_oos  <- attributes(cheem_basis)$data_oos
@@ -266,7 +266,7 @@ local_attribution_matrix <- function(
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
-  do_normalize_obs = TRUE,
+  do_normalize_rows = TRUE,
   keep_large_intermediates = FALSE,
   ...){
   ## Assumptions
@@ -321,7 +321,7 @@ local_attribution_matrix <- function(
     
     ## Single obs of local attribution matrix
     .obs_local_attr <- .scree_la$median_local_attr
-    if(do_normalize_obs == TRUE)
+    if(do_normalize_rows == TRUE)
       .obs_local_attr <- tourr::normalise(.obs_local_attr)
     
     ## Assign to return row
