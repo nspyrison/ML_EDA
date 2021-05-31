@@ -4,7 +4,6 @@
 .Ruserdata
 
 /data/
-**_fifa_cache/
-**_fifa_files/
-/vignettes/cheem_fifa.html
-vignettes/cheem_fifa.html
+**/*_cache/
+**/*_files/
+**/*.html
