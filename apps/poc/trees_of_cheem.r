@@ -27,7 +27,7 @@ df_scree_local_attr <- function(x, ...){ ## x should be a predict_parts() return
 
 #' @example
 #' ## Discrete supervised classification
-#' dat <- spinifex::scale_sd(flea[, 1:6])
+#' dat <- spinifex::scale_sd(tourr::flea[, 1:6])
 #' clas <- flea$species
 #' tgt_obs <- 10 ## row number in 1:nrow(dat)
 #' tgt_var <- clas == clas[tgt_obs] ## Or regression on a continuous var not in data.
@@ -57,7 +57,7 @@ basis_cheem <- function(
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
-  basis_type = c("RF_importance", "pca", "olda", "odp", "onpp", NULL),
+  basis_type = c(NULL, "RF_importance", "pca", "olda", "odp", "onpp"),
   keep_large_intermediates = FALSE,
   ...
 ){
@@ -105,19 +105,34 @@ basis_cheem <- function(
     data = data_else,
     y = target_var_else,
     label = paste0(parts_type, " local attribution of random forest model"))
-  .parts <- DALEX::predict_parts(explainer = .ex_rf, ## ~ 10 s @ B=25
+  .parts <- DALEX::predict_parts(explainer = .ex_rf, ## Takes some time.
                                  new_observation = data_oos,
                                  type = parts_type,
                                  N = parts_N,
                                  B = parts_B,
                                  ...)
   
-  #### The local attribution of those parts, to be use as first dim of projection
-  .scree_la <- df_scree_local_attr(.parts)
-  ## Keep in mind that there are class # of level shap values if you don't test against specific class level
-  ## Reorder scree table back to original data colname order
-  .row_idx <- order(match(.scree_la$variable_name, colnames(data)))
-  .scree_la <- .scree_la[.row_idx, ]
+  #### The local attribution of those parts [1, p] vector in SHAP order.
+  ## Remade from: iBreakDown:::print.break_down_uncertainty
+  .df_la <- data.frame(
+    label = tapply(.parts$label, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+    variable_name = tapply(.parts$variable_name, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+    variable_value = tapply(.parts$variable_value, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE), ## oos variable value
+    median_local_attr = tapply(.parts$contribution, paste(.parts$label, .parts$variable, sep = ": "), median, na.rm = TRUE)
+  )
+  ## Reorder .df_la back to original data colname order
+  .row_idx <- order(match(.df_la$variable_name, colnames(data)))
+  .df_la   <- .df_la[.row_idx, ]
+  
+  # .la_r_fct_lvl <- gsub(".*\\.","", .parts$label)
+  # .fct_lvl <- if(length(unique(.la_r_fct_lvl)) == 1L){""}else{.la_r_fct_lvl}
+  ## What if factor was tested instead of boolean?
+  .guess_bas.dat_ratio <- nrow(.df_la) / ncol(data)
+  if(.guess_bas.dat_ratio != 1L)
+    stop(paste0(
+      "Local attribution has ", .guess_bas.dat_ratio,
+      " times as many rows as the columns of the data. Make sure you didn't want to test a boolean such as tgt_var <- clas == clas[new_obs]. If you need this loop over a test for each factor level."))
+   # paste0(substitute(class), "=", gsub(".*\\.","", .parts$label))
   
   #### Basis of a global feature (holdout_rownum removed), to use as second dim of projection
   if(is.null(basis_type) == FALSE){
@@ -132,13 +147,13 @@ basis_cheem <- function(
     )
     
     #### Bring them together and orthonormalize
-    .cheem_bas <- cbind(.scree_la$median_local_attr, .bas)[, 1L:2L]
+    .cheem_bas <- cbind(.df_la$median_local_attr, .bas)[, 1L:2L]
     .cheem_bas <- as.matrix(tourr::orthonormalise(.cheem_bas))
     colnames(.cheem_bas) <- c(parts_type, paste0(basis_type, "1"))
   }else{ ## basis_type is NULL; format parts local attributes
-    .cheem_bas <- as.matrix(tourr::normalise(.scree_la$median_local_attr))
+    .cheem_bas <- as.matrix(tourr::normalise(.df_la$median_local_attr))
     colnames(.cheem_bas) <- parts_type
-    rownames(.cheem_bas) <- .scree_la$variable_name
+    rownames(.cheem_bas) <- .df_la$variable_name
   }
   
   ## Keep attributes
@@ -188,11 +203,11 @@ print.cheem_basis <- function (x, ...){
 view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   cheem_basis, show_parts = TRUE,
   oos_identity_args =
-    if(ncol(cheem_basis) >= 2){list(color = "red", size = 5, shape = 8)}else
+    if(ncol(cheem_basis) >= 2){list(color = "red", size = 5L, shape = 8L)}else
       list(color = "red", size = 1.5, linetype = 2L, length = unit(1, "npc"), alpha = .5),
   ...){ ## Passed to plot.predict_parts()
-  .data_else <- attributes(cheem_basis)$data_else
-  .data_oos  <- attributes(cheem_basis)$data_oos
+  .data_else  <- attributes(cheem_basis)$data_else
+  .data_oos   <- attributes(cheem_basis)$data_oos
   .class_else <- attributes(cheem_basis)$class_else
   .class_oos  <- attributes(cheem_basis)$class_oos
   .cn <- colnames(cheem_basis)
@@ -241,8 +256,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   gg <- gg +
     ggproto_data_background(gridlines = FALSE) +
     .ggp_data +
-    theme(legend.position = "off",
-          axis.title = element_text())
+    theme(axis.title = element_text())
   
   ## Plot(predict_parts(), by patchwork?
   if(show_parts == TRUE){

@@ -36,7 +36,7 @@ ggplot_tour <- function(basis_array, data = NULL,
       scale_to <- data.frame(x = quantile(df_data[, 1L], 
                                           probs = c(.01, .99)),
                              y = 1.8 * range(.den[[2L]]))
-    }else{stop("scale_to missing from ggplot_tour() call.")}
+    }else{browser();stop("scale_to missing from ggplot_tour() call.")}
   }
   
   ## Assign hidden prepared dataframes

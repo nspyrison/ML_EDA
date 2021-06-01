@@ -62,6 +62,8 @@ clas <- raw[, 5]
 new_obs <- 42 ## Needed for some varieties
 tgt_var <- clas == clas[new_obs]
 clas[new_obs]
+
+table(clas) ## Note that classes are quite uneven
 ```
 
 ## EDA
@@ -161,21 +163,43 @@ GGally::ggpairs(as.data.frame(proj_olda), mapping = aes(color = clas_sub),
 
 # Side-by-side SHAP
 
-Place holder, ideas:
+Placeholder, ideas:
 
-## Model describing a discrete, rather than boolean vector
+## When target variable iterates over factor levels
+
+Note this is equivalent to corrupting the class of the held out obs, though I frame it in terms of changing the test variable.
+
+```{r, fig.height=10}
+## current y var:  tgt_var <- clas == clas[new_obs]
+print(paste0("Above the RF model had dependant variable, y class == ", clas[new_obs], ". Let's see how the SHAP values and their 1d proj change when we iterate thru testing for each of the class levels."))
+.lvls <- levels(clas)
+
+sapply(seq_along(.lvls), function(i){
+  capture.output(
+    bas_cheem <- basis_cheem(data = dat, holdout_rownum = new_obs,
+                             target_var = clas == .lvls[i],
+                             class = clas, parts_type = "shap", basis_type = NULL)
+  )
+  g <- plot.cheem_basis(bas_cheem) + 
+    ggtitle(paste0("y_var: class == ", .lvls[i]))
+  assign(paste0("g", i), g, envir = .GlobalEnv)
+})
+
+g1 / g2 /g3 / g4
+```
 
 ## Observations at center vs edge of a class elipsoid
 
-## Courupting the class of an observation
+Another direction to take this would be to texture or rasterize the local rate of change of target var or shap values some how. I think this is trying to aggregate partial dependence values or their first derivative a predicted value, like i would want raster/density of the y var. overlaid on a given projection of x's.
 
+```{r}
 
-
+```
 
 # Shiny app
 
 thoughts:
-
+- prepare and read cleaned data, models, shaps, etc.
 - data: revisit fifa vignette and flow.
 - preprocessing: scale, no DR (original var needed for most interprability)
 - whats visuals wanted?
@@ -188,7 +212,7 @@ thoughts:
 
 # An aside: DALEX::plot.predict_parts() symmetrically robust?: yes
 
-In short, yes.
+In short, _yes_.
 
 In the following evaluated R chunk (see code) we permute both the output DALEX::predict_parts columns and that of the input data. Both do not change the print order (though permuting the parts order does destroy the local attribution CI.)
 
