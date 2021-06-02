@@ -200,9 +200,14 @@ Then:
 1) make gird on Y,
 2) map back to X'.
 3) solve SHAP of X', [g, p]
-4) 
+4) raster/heatmap of the change,
 
-```{r}
+Need to interrogate an RF model w.r.t. y-variable, how do you know which classification/species a grid search is?
+
+Alternative:
+Consider convex hull points (or all), hold class means as benchmark for comparison, view the norm of the SHAP values away from this point.
+
+```{r, eval=FALSE}
 dat  <- scale_sd(tourr::flea[, 1:6])
 clas <- tourr::flea$species
 bas  <- basis_olda(dat, clas)
@@ -222,7 +227,6 @@ sapply(1:nrow(.grid_x), function(i){
                                  target_var = tgt_var,
                                  class = clas, parts_type = "shap", basis_type = NULL)
 })
-
 
 
 ```

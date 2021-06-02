@@ -1,16 +1,12 @@
-### ML_EDA/apps/poc/app.r -----
-
-#' {shiny} application for exploratory data analysis in principal 
-#' component-space. The primary pipeline is to: input data, 
-#' perform preprocessing, estimates the intrinsic data dimensionality,
-#' explore ensemble graphics in PC-space with tooltips back to dataspace. 
-#' Output options will include processed data, PC-space, ensemble graphics
+### ./apps/cheem/app.r -----
+#' {shiny} application to interactively explore Cheem and SHAP local attribtions
+#' of a new observation, w.r.t. `n` premade RF models. This is performed on 
+#' dataset: DALEX::fifa, from Kaggle about soccer data from the 2020 season. 
+#' See ?DALEX::fifa for more info. 
 #' 
 #' @author Nicholas Spyrison
-#' Feb. 2021
-
+#' June 2021
 source("ui.r", local = TRUE, encoding = "utf-8")
-#source("ggproto_screeplot_pca.r", local = TRUE, encoding = "utf-8")
 
 server <- function(input, output, session){
   rv <- reactiveValues()
