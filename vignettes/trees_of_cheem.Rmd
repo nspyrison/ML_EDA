@@ -45,11 +45,11 @@ require("spinifex")
 require("tourr")
 require("ggplot2")
 ## Especially, see basis_cheem() and view_cheem()
-source("./apps/poc/trees_of_cheem.r")
+source("./apps/cheem/trees_of_cheem.r")
 ## New spinifex ggproto_* api
-source("./apps/poc/spinifex_ggproto.r")
+source("./apps/cheem/spinifex_ggproto.r")
 if(F)
-  file.edit("./apps/poc/trees_of_cheem.r")
+  file.edit("./apps/cheem/trees_of_cheem.r")
 ```
 
 ## Data setup
@@ -152,7 +152,7 @@ Note that aesthetics are still a pain, for the oos obs case.
 
 ```{r}
 ## Sourced above:
-#source("./apps/poc/spinifex_ggproto.r")
+#source("./apps/cheem/spinifex_ggproto.r")
 ggt <-
   ggplot_tour(tgt_bases, dat) +
   ggproto_basis_axes() +
@@ -167,7 +167,7 @@ animate_plotly(ggt)
 
 ```{r, fig.width=8}
 ## Sourced above:
-#source("./apps/poc/spinifex_ggproto.r")
+#source("./apps/cheem/spinifex_ggproto.r")
 .parts <- attributes(bas_cheem)$predict_parts ## Note that array loses predicted parts
 gg_ls <- list(plot(.parts))
 mute <- sapply(seq_along(tgt_bases), function(i){

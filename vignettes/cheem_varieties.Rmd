@@ -41,12 +41,12 @@ require("tictoc")
 require("patchwork")
 require("plotly")
 ## Local functions
-source("./apps/poc/trees_of_cheem.r")   ## Cheem functions
-source("./apps/poc/spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+source("./apps/cheem/trees_of_cheem.r")   ## Cheem functions
+source("./apps/cheem/spinifex_ggproto.r") ## New (spinifex) ggproto_* api
 ## Not run, open local function files
 if(F){
-  file.edit("./apps/poc/trees_of_cheem.r")
-  file.edit("./apps/poc/spinifex_ggproto.r")
+  file.edit("./apps/cheem/trees_of_cheem.r")
+  file.edit("./apps/cheem/spinifex_ggproto.r")
 }
 ```
 
@@ -190,9 +190,40 @@ g1 / g2 /g3 / g4
 
 ## Observations at center vs edge of a class elipsoid
 
-Another direction to take this would be to texture or rasterize the local rate of change of target var or shap values some how. I think this is trying to aggregate partial dependence values or their first derivative a predicted value, like i would want raster/density of the y var. overlaid on a given projection of x's.
+Another direction to take this would be to texture or rasterize the local rate of change of target var or shap values some how. I think this is trying to aggregate partial dependence values or their first derivative a predicted value, like I would want raster/density of the y var. overlaid on a given projection of x's.
+
+given:
+1) X[nxp] * A[pxd] = Y[nxd]
+2) f, RF model
+
+Then:
+1) make gird on Y,
+2) map back to X'.
+3) solve SHAP of X', [g, p]
+4) 
 
 ```{r}
+dat  <- scale_sd(tourr::flea[, 1:6])
+clas <- tourr::flea$species
+bas  <- basis_olda(dat, clas)
+
+proj <- dat %*% bas 
+.x_min <- min(proj[, 1])
+.x_max <- max(proj[, 1])
+.y_min <- min(proj[, 2])
+.y_max <- max(proj[, 2])
+## Cross join form 100 grid pts
+.grid_y <- merge(seq(.x_min, .x_max, length.out = 10),
+                 seq(.y_min, .y_max, length.out = 10), by = NULL)
+.grid_x <- as.matrix(.grid_y) %*% t(bas)
+shap_grid <- matrix(NA, ncol = ncol(.grid_x), nrow = nrow(.grid_x))
+sapply(1:nrow(.grid_x), function(i){
+  shap_grid[i, ] <<- basis_cheem(data = .grid_x, holdout_rownum = i,
+                                 target_var = tgt_var,
+                                 class = clas, parts_type = "shap", basis_type = NULL)
+})
+
+
 
 ```
 
