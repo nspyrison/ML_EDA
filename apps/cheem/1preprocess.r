@@ -5,7 +5,7 @@ if(F){
 }
 
 
-## Dependancies ------
+## Dependencies ------
 require("DALEX")
 require("spinifex")
 require("tourr")
@@ -41,7 +41,7 @@ toc()
 ## Further avg some highly correlated vars.
 dat <- dat %>% dplyr::mutate(
   .keep = "unused",
-  ## Target variables,  agg skill, and financial 
+  ## Target variables, agg skill, and financial 
   value = (potential+overall+wage_eur+value_eur+movement_reactions)/5,
   bmi = weight_kg / (height_cm / 100)^2,
   age = age,
@@ -102,4 +102,4 @@ maha_lookup_df <- data.frame(id = 1:nrow(dat),
                              gk  = dat$gk)
 
 ## local_attribution_matrix -----
-la_mat <- local_attribution_matrix(dat, tgt_var)
+la_ls <- local_attribution_ls(dat, tgt_var)

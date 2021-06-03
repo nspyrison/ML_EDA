@@ -20,6 +20,7 @@ source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
 if(F){
   file.edit("./apps/cheem/trees_of_cheem.r")
   file.edit("./apps/cheem/spinifex_ggproto.r")
+  file.edit("./apps/cheem/1preprocess.r")
 }
 ## Shiny specific
 require("tidyr") ## Needed for pivoting, exports `%>%`
@@ -28,7 +29,8 @@ require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 require("DT") ## For html table and buttons
 
-## Initialize
+## Load & initialize ----
+
 #palette(RColorBrewer::brewer.pal(8L, "Dark2"))
 
 ##### tab1_input -----

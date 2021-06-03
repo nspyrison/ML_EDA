@@ -275,7 +275,7 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
 #' 
 #' la_mat <- local_attribution_matrix(dat, tgt_var)
 #' GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
-local_attribution_matrix <- function(
+local_attribution_ls <- function(
   data, target_var,
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
@@ -295,7 +295,7 @@ local_attribution_matrix <- function(
   .n <- nrow(data)
   
   #### Iterating over each each observation:
-  ret <- matrix(NA, nrow = .n, ncol = .p)
+  ret <- list(NULL)
   .mute <- sapply(1L:nrow(data), function(i){
     ## Initialize held out observation for data, target var, optional class var
     .data_oos  <- data[i,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
@@ -326,20 +326,28 @@ local_attribution_matrix <- function(
                                    B = parts_B,
                                    ...)
     
-    #### The local attribution of those parts, to be use as first dim of projection
-    .scree_la <- df_scree_local_attr(.parts)
-    ## Keep in mind that there are class # of level shap values if you don't test against specific class level
-    ## Reorder scree table back to original data colname order
-    .row_idx <- order(match(.scree_la$variable_name, colnames(data)))
-    .scree_la <- .scree_la[.row_idx, ]
+    #### The local attribution of those parts [1, p] vector in SHAP order.
+    ## Remade from: iBreakDown:::print.break_down_uncertainty
+    .df_la <- data.frame(
+      label = tapply(.parts$label, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+      variable_name = tapply(.parts$variable_name, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+      variable_value = tapply(.parts$variable_value, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE), ## oos variable value
+      median_local_attr = tapply(.parts$contribution, paste(.parts$label, .parts$variable, sep = ": "), median, na.rm = TRUE)
+    )
+    ## Reorder .df_la back to original data colname order
+    .row_idx <- order(match(.df_la$variable_name, colnames(data)))
+    .df_la   <- .df_la[.row_idx, ]
     
     ## Single obs of local attribution matrix
-    .obs_local_attr <- .scree_la$median_local_attr
+    .obs_local_attr <- .df_la$median_local_attr
     if(do_normalize_rows == TRUE)
       .obs_local_attr <- tourr::normalise(.obs_local_attr)
+    colnames(.obs_local_attr) <- parts_type
+    rownames(.obs_local_attr) <- .df_la$variable_name
     
-    ## Assign to return row
-    ret[i,] <<- t(as.matrix(.obs_local_attr))
+    ## Keep attributes and assign
+    attr(.obs_local_attr, "predict_parts") <- .parts
+    ret[[i]] <<- .obs_local_attr)
   })
   .rn <- rownames(data)
   if(is.null(.rn) == TRUE) .rn <- 1L:.n
