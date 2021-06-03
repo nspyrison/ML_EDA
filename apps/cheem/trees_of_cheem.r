@@ -111,6 +111,9 @@ basis_cheem <- function(
                                  N = parts_N,
                                  B = parts_B,
                                  ...)
+  if(keep_large_intermediates == FALSE)
+    attr(.parts, "yhats_distribution") <- NULL ## remove ~90% the size, without hurting plot.predict_parts
+  attr(.cheem_bas, "predict_parts") <- .parts
   
   #### The local attribution of those parts [1, p] vector in SHAP order.
   ## Remade from: iBreakDown:::print.break_down_uncertainty
@@ -168,7 +171,6 @@ basis_cheem <- function(
     attr(.cheem_bas, "randomForest") <- .rf
     attr(.cheem_bas, "explain")      <- .ex_rf
   }
-  attr(.cheem_bas, "predict_parts") <- .parts
   
   ## Return
   return(.cheem_bas)
@@ -283,11 +285,12 @@ local_attribution_list <- function(
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
   do_normalize_rows = TRUE,
-  n_cores = parallel::detectCores() - 1L,
+  n_cores = parallel::detectCores() - 1,
   ...){
   ## Assumptions
-  requireNamespace("doParallel")
-  #requireNamespace("treeshap") ## Not explicitly used, maybe implicitly called in DALEX?
+  require("doParallel")
+  is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
+    is.factor(x) || is.character(x) || is.logical(x)
   data <- as.data.frame(data)
   
   ## Initialize
@@ -295,44 +298,55 @@ local_attribution_list <- function(
   .p <- ncol(data)
   .n <- nrow(data)
   
+  if(is.discrete(target_var)){
+    .target_var_else <- target_var[-i] == target_var[i]
+    .RF_mtry <- sqrt(.p)
+    .rf_ls <- .ex_rf_ls <- list()
+    .u_tgt <<- unique(target_var)
+    .mute <- sapply(1:length(.u_tgt), function(i){
+      .rf_ls[[i]] <- randomForest::randomForest(target_var~.,
+                                                data = data.frame(target_var == .u_tgt[i], data),
+                                                mtry = .RF_mtry)
+      .ex_rf_ls[[i]] <- DALEX::explain(model = .rf_ls[[i]],
+                                       data = data,
+                                       y = target_var == .u_tgt[i],
+                                       label = paste0(parts_type, " local attribution of random forest model"))
+    })
+    names(.rf_ls) <- .u_tgt
+  }else{ ## target_var_else is continuous
+    .RF_mtry <- .p / 3L
+    #### Random forest, of hold one out data
+    .rf_ls <- list(randomForest::randomForest(target_var~.,
+                                      data = data.frame(target_var, data),
+                                      mtry = .RF_mtry))
+    #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
+    .ex_rf_ls <- list(DALEX::explain(model = .rf_ls[[1L]],
+                                     data = data,
+                                     y = target_var,
+                                     label = paste0(parts_type, " local attribution of random forest model"))
+    )
+  }
+  
   #### Iterating over each each observation:
   ret <- list(NULL)
   doParallel::registerDoParallel(cores = n_cores) #in windows by default 2, in general n-1
   .r_idx <- 1:.n
-  is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
-    is.factor(x) || is.character(x) || is.logical(x)
+
   ## Parallelized for each row num -----
   ret <- foreach::foreach(i = .r_idx,
                  .packages = c("DALEX", "treeshap", "spinifex", "tourr")
   ) %dopar% {
-    ## Initialize held out observation for data, target var, optional class var
-    .data_oos  <- data[i,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
-    .data_else <- data[-i, ]
-    if(is.discrete(target_var)){
-      .target_var_else <- target_var[-i] == target_var[i]
-      .RF_mtry <- sqrt(.p)
-    }else{ ## target_var_else is continuous
-      .target_var_else <- target_var[-i]
-      .RF_mtry <- .p / 3L
-    }
-    
-    #### Random forest, of hold one out data
-    .rf <- randomForest::randomForest(.target_var_else~.,
-                                      data = data.frame(.target_var_else, .data_else),
-                                      mtry = .RF_mtry)
-    
-    #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
-    .ex_rf <- DALEX::explain(
-      model = .rf,
-      data = .data_else,
-      y = .target_var_else,
-      label = paste0(parts_type, " local attribution of random forest model"))
-    .parts <- DALEX::predict_parts(explainer = .ex_rf,
-                                   new_observation = .data_oos,
+    .this_ex_idx <- 1L ## init
+    if(is.discrete(target_var))
+      .this_ex_idx <- which(.u_tgt == target_var[i])
+    .parts <- DALEX::predict_parts(explainer = .ex_rf_ls[[.this_ex_idx]],
+                                   new_observation =  data[i,, drop = FALSE],
                                    type = parts_type,
                                    N = parts_N,
                                    B = parts_B,
                                    ...)
+    attr(.parts, "yhats_distribution") <- NULL ## Reduce ~90% the size, without hurting plot.predict_parts
+    
     
     #### The local attribution of those parts [1, p] vector in SHAP order.
     ## Remade from: iBreakDown:::print.break_down_uncertainty
@@ -353,6 +367,7 @@ local_attribution_list <- function(
     colnames(.obs_local_attr) <- parts_type
     rownames(.obs_local_attr) <- .df_la$variable_name
     
+    if(i %% 10 == 0) print(paste0("Done with i = ", i))
     ## Keep attributes and assign
     attr(.obs_local_attr, "predict_parts") <- .parts
     .obs_local_attr

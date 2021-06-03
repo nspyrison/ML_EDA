@@ -101,5 +101,27 @@ maha_lookup_df <- data.frame(id = 1:nrow(dat),
                              pwr = dat$pwr,
                              gk  = dat$gk)
 
-## local_attribution_matrix -----
-la_ls <- local_attribution_ls(dat, tgt_var)
+## local_attribution_list -----
+
+tictoc::tic("local_attribution_list")
+#cheem <- basis_cheem(dat[1:500,], 42, tgt_var[1:500,])
+la_ls <- local_attribution_list(dat, tgt_var)
+tictoc::toc()
+
+
+
+if(F){
+  tictoc::tic()
+  cheem <- basis_cheem(dat[1:500,], 42, tgt_var[1:500,])
+  tictoc::toc()
+  str(cheem)
+  object.size(cheem)
+  
+  ## 3.8 Hrs for 5000x30sec / 11 cores
+  ## 27.8 Gb for  694736 bytes * 5000 in Gb
+  ## .67 Gb  for 16912 bytes * 5000 in Gb
+  z<- cheem
+  attr(z, "data_else") <- NULL
+  str(z)
+  object.size(z)
+}
