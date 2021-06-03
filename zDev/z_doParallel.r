@@ -55,15 +55,17 @@ rf_mod_p <- vector()
 ptime <- system.time({
   rf_mod_p <- foreach(
     i = unique(split_testing),
-    .combine = c,
-    .packages = c("randomForest")) %dopar% {
+    .combine = c, ## A function to bind pieces together
+    .packages = c("randomForest")) %dopar% { ## 
       rf_mod <- randomForest(y ~ x1 + x2 + x3,
                              data = training[.idx_par,])
     }
 })
 ptime
-summary(result_p)
+summary(rf_mod_p)
 summary(rf_mod)
 
+str(rf_mod_p)
+str(rf_mod)
 
-summary(result_p) == summary(predicted_test)
+summary(rf_mod_p) == summary(rf_mod)

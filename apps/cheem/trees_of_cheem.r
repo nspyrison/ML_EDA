@@ -57,7 +57,7 @@ basis_cheem <- function(
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
-  basis_type = c(NULL, "RF_importance", "pca", "olda", "odp", "onpp"),
+  basis_type = c("none", NULL, "RF_importance", "pca", "olda", "odp", "onpp"),
   keep_large_intermediates = FALSE,
   ...
 ){
@@ -136,26 +136,28 @@ basis_cheem <- function(
   
   #### Basis of a global feature (holdout_rownum removed), to use as second dim of projection
   if(is.null(basis_type) == FALSE){
-    basis_type <- match.arg(basis_type)
-    .bas <- switch(basis_type,
-                   RF_importance = randomForest::importance(.rf, type = 1L),
-                   pca  = basis_pca(data_else),
-                   olda = basis_olda(data_else, class_else),
-                   odp  = basis_odp(data_else, class_else),
-                   onpp = basis_onpp(data_else), ## Using default hyperparameters
-                   stop("basis_type expects 'RF_importance', 'pca', 'olda', 'odp', 'onpp' or NULL.")
-    )
-    
-    #### Bring them together and orthonormalize
-    .cheem_bas <- cbind(.df_la$median_local_attr, .bas)[, 1L:2L]
-    .cheem_bas <- as.matrix(tourr::orthonormalise(.cheem_bas))
-    colnames(.cheem_bas) <- c(parts_type, paste0(basis_type, "1"))
-  }else{ ## basis_type is NULL; format parts local attributes
-    .cheem_bas <- as.matrix(tourr::normalise(.df_la$median_local_attr))
-    colnames(.cheem_bas) <- parts_type
-    rownames(.cheem_bas) <- .df_la$variable_name
+    if(basis_type != "none"){
+      basis_type <- match.arg(basis_type)
+      .bas <- switch(basis_type,
+                     RF_importance = randomForest::importance(.rf, type = 1L),
+                     pca  = basis_pca(data_else),
+                     olda = basis_olda(data_else, class_else),
+                     odp  = basis_odp(data_else, class_else),
+                     onpp = basis_onpp(data_else), ## Using default hyperparameters
+                     stop("basis_type expects 'RF_importance', 'pca', 'olda', 'odp', 'onpp' or NULL.")
+      )
+      
+      #### Bring them together and orthonormalize
+      .cheem_bas <- cbind(.df_la$median_local_attr, .bas)[, 1L:2L]
+      .cheem_bas <- as.matrix(tourr::orthonormalise(.cheem_bas))
+      colnames(.cheem_bas) <- c(parts_type, paste0(basis_type, "1"))
+    }else{ ## basis_type is NULL; format parts local attributes
+      .cheem_bas <- as.matrix(tourr::normalise(.df_la$median_local_attr))
+      colnames(.cheem_bas) <- parts_type
+      rownames(.cheem_bas) <- .df_la$variable_name
+    }
   }
-  
+    
   ## Keep attributes
   attr(.cheem_bas, "class") <- c("cheem_basis", "matrix")
   attr(.cheem_bas, "data_else") <- as.matrix(data_else)
@@ -275,17 +277,16 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
 #' 
 #' la_mat <- local_attribution_matrix(dat, tgt_var)
 #' GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
-local_attribution_ls <- function(
+local_attribution_list <- function(
   data, target_var,
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
   do_normalize_rows = TRUE,
-  keep_large_intermediates = FALSE,
+  n_cores = parallel::detectCores() - 1L,
   ...){
   ## Assumptions
-  requireNamespace("randomForest")
-  requireNamespace("DALEX")
+  requireNamespace("doParallel")
   #requireNamespace("treeshap") ## Not explicitly used, maybe implicitly called in DALEX?
   data <- as.data.frame(data)
   
@@ -296,7 +297,14 @@ local_attribution_ls <- function(
   
   #### Iterating over each each observation:
   ret <- list(NULL)
-  .mute <- sapply(1L:nrow(data), function(i){
+  doParallel::registerDoParallel(cores = n_cores) #in windows by default 2, in general n-1
+  .r_idx <- 1:.n
+  is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
+    is.factor(x) || is.character(x) || is.logical(x)
+  ## Parallelized for each row num -----
+  ret <- foreach::foreach(i = .r_idx,
+                 .packages = c("DALEX", "treeshap", "spinifex", "tourr")
+  ) %dopar% {
     ## Initialize held out observation for data, target var, optional class var
     .data_oos  <- data[i,, drop = FALSE] ## drop = FALSE retains data.frame rather than coerce to vector.
     .data_else <- data[-i, ]
@@ -347,13 +355,16 @@ local_attribution_ls <- function(
     
     ## Keep attributes and assign
     attr(.obs_local_attr, "predict_parts") <- .parts
-    ret[[i]] <<- .obs_local_attr)
-  })
+    .obs_local_attr
+  }
+  
+  ## Format
+  doParallel::stopImplicitCluster()
   .rn <- rownames(data)
   if(is.null(.rn) == TRUE) .rn <- 1L:.n
   rownames(ret) <- paste0(parts_type, " of ", .rn)
   colnames(ret) <- colnames(data)
-  attr(ret, "class") <- c("local_attribution_matrix", "matrix")
+  attr(ret, "class") <- c("local_attribution_list", "list")
   
   ## Return
   return(ret)
