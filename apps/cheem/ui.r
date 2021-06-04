@@ -16,6 +16,8 @@ require("plotly")
 ## Local functions
 source("trees_of_cheem.r")   ## Cheem functions
 source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+
+source("1preprocess.r") ## New (spinifex) ggproto_* api
 ## Not run, open local function files
 if(F){
   file.edit("./apps/cheem/trees_of_cheem.r")
@@ -33,88 +35,40 @@ require("DT") ## For html table and buttons
 
 #palette(RColorBrewer::brewer.pal(8L, "Dark2"))
 
-##### tab1_input -----
-### Input data, default to flea
-tab1_input <- tabPanel("Input", fluidPage(
-    sidebarPanel(width = 3L,
-      ## Input csv file
-      selectInput("data_select", "Data selection, from {mlbench}",
-                  choices = mlb_dat),
-      uiOutput("proc_dat_inputs"),
-      ## Preprocessing
-      hr(),
-      h3("Preprocessing:"),
-      textOutput("na_msg"),
-      radioButtons("scale_mode", "scale",
-                   choices = c("std dev",
-                               "[0, 1]",
-                               "none"),
-                   selected = "std dev"),
-      checkboxInput("do_sphere", "sphere",
-                    value = FALSE),
-      sliderInput("subsample_slider", label = "Subsample observations [%] -- WIP",
-                  min = 10L, max = 100L, value = 100L, step = 10L),
-      textOutput("subsample_msg"),
-    ),
-    ## Main panel display
-    mainPanel(
-      fluidRow(
-        column(width = 4L,
-               h3("Input data structure"),
-               verbatimTextOutput("raw_dat_str")),
-        column(width = 8L,
-               h3("Processed data summary"),
-               verbatimTextOutput("proc_dat_smry"))
-      ),
-      h3("Processed data univariate densities"),
-      plotOutput("proc_dat_density", width = "1100px", height = "682px")
-    ) ## close mainPanel
-)) ## Assign tab1_input
 
-##### tab2_explore ----
-tab2_explore <- tabPanel("Explore", sidebarLayout(
+
+##### tab2_cheem ----
+tab1_explore <- tabPanel("Cheem", sidebarLayout(
   fluid = FALSE,
-  ## sidebarPanel: IDE, PC screeplot
-  sidebarPanel(width = 4L,
-               ## Estimating dim
-               h3("Intrinsic Data Dimensionality Estimate (IDE)"),
-               tableOutput("ide_tbl") %>%
-                 shinycssloaders::withSpinner(type = 8L),
-               column(width = 12L, h3(textOutput("ide_msg"), align = "center")),
-               fluidRow(
-                 column(width = 6L, align = "center", actionButton("remove_dim", "< Remove a variable")),
-                 column(width = 6L, align = "center", actionButton("add_dim", "Add a variable >")),
-               ),
-               column(width = 12L, h3(textOutput("pca_header"), align = "center")),
-               ## PCA screeplot
-               plotOutput("pc_screeplot") %>% withSpinner(type = 8L)
-  ),
   ## mainPanel: Tourr, tSNE
-  mainPanel(width = 8L,
-            ## Tour
-            h3("Linear embedding"),
-            p("A tour -- animations of linear embeddings (orthonormally constrained)"),
-            plotly::plotlyOutput("tour_plotly", width = "720px", height = "480") %>%
+  mainPanel(width = 12L,
+            h1("Fifa data, 2020 season"),
+            
+            ## Cheem plot 
+            h2("Cheem plot"),
+            numericInput("ooo_rownum", "Player id", 1L, 1L, 5000L),
+            plotOutput("cheem_plot", width = "100%") %>%
               shinycssloaders::withSpinner(type = 8L),
-            radioButtons("tour_mode", "Tour mode",
-                         choices = c("local",
-                                     "grand",
-                                     "stepwise (WIP)",
-                                     "guided? (WIP)"),
-                         selected = "local",
-                         inline = TRUE),
-            ## tSNE
-            h3("Non-linear embedding"),
-            p("tSNE, non-linear embedding -- distances not Euclidean; be careful with interpretive claims"),
-            textOutput("tsne_msg"),
-            plotly::plotlyOutput("tsne_plotly", width = "720px", height = "480px") %>%
-              shinycssloaders::withSpinner(type = 8L)
+            
+            ## Maha lookup
+            h2("Mahalonobis lookup table"),
+            textInput("search_chr", "search player name:", "",
+                      placeholder = "<try searching on sur name>"),
+            DT::DTOutput("maha_lookup_DT", width = "100%") %>%
+              shinycssloaders::withSpinner(type = 8L),
+            
+            # ## tSNE
+            # h3("Non-linear embedding"),
+            # p("tSNE, non-linear embedding -- distances not Euclidean; be careful with interpretive claims"),
+            # textOutput("tsne_msg"),
+            # plotly::plotlyOutput("tsne_plotly", width = "720px", height = "480px") %>%
+            #   shinycssloaders::withSpinner(type = 8L)
   )
-)) ## Assign tab2_explore
+)) ## Assign tab1_cheem
 
 
-##### tab4_about -----
-tab3_about <- tabPanel("About (WIP)", fluidPage(
+##### tab2_about -----
+tab2_about <- tabPanel("About", fluidPage(
   h2("Context & motivation:"),
   p("Modern modeling faces a trade of between interprebility and accuracy of a model. 
     Black-box models use increasingly more and complex interaction terms between features. 
@@ -139,9 +93,8 @@ tab3_about <- tabPanel("About (WIP)", fluidPage(
 ###### Combined ui object ----
 ui <- fluidPage(theme = shinythemes::shinytheme("flatly"), 
                 ## Content:
-                navbarPage("Machine learning exploratory data analysis, Proof of Concept",
-                           tab1_input,
-                           tab2_explore,
-                           tab3_about)
+                navbarPage("Cheem, Intro",
+                           tab1_cheem,
+                           tab2_about)
 )
 

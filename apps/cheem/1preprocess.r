@@ -3,6 +3,8 @@ if(F){
   dat
   tgt_var
   maha_lookup_df
+  rf
+  expl
 }
 
 ## Created from analysis in:
@@ -99,10 +101,36 @@ maha_lookup_df <- data.frame(id = 1:nrow(dat),
 
 
 
-## RF model
+## Random forest model -----
+.p <- ncol(dat)
+.rf_mtry <- if(is.discrete(tgt_var)) sqrt(.p) else .p / 3L
+system.time(
+  .rf <- randomForest::randomForest(tgt_var~.,
+                                    data = data.frame(tgt_var, dat),
+                                    mtry = .rf_mtry)
+)
 
-basis_cheem(data = dat, holdout_rownum = tgt_row, target_var = y_var,
-           parts_type = "shap", basis_type = "pca")
+## Explainer -----
+system.time(
+expl <- DALEX::explain(model = .rf,
+                       data = dat,
+                       y = tgt_var,
+                       label = "SHAP-ley values of Rand. Forest")
+)
+
+
+## EXPORT OBJECTS ----
+if(F){
+  save(dat,
+       tgt_var,
+       maha_lookup_df,
+       expl,
+       file = "1preprocess.RData")
+  file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData")
+  file.remove("./1preprocess.RData")
+}
+
+
 
 ## local_attribution_list NOT RUN -----
 if(F){
@@ -115,6 +143,7 @@ if(F){
   str(la_ls)
 }
 
+## testing and planning ----
 
 if(F){
   tictoc::tic()
