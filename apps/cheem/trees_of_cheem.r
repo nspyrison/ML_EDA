@@ -113,7 +113,6 @@ basis_cheem <- function(
                                  ...)
   if(keep_large_intermediates == FALSE)
     attr(.parts, "yhats_distribution") <- NULL ## remove ~90% the size, without hurting plot.predict_parts
-  attr(.cheem_bas, "predict_parts") <- .parts
   
   #### The local attribution of those parts [1, p] vector in SHAP order.
   ## Remade from: iBreakDown:::print.break_down_uncertainty
@@ -167,6 +166,7 @@ basis_cheem <- function(
   attr(.cheem_bas, "data_oos")  <- as.matrix(data_oos)
   attr(.cheem_bas, "class_else") <- class_else ## Can't call it "class" b/c matrix/df.
   attr(.cheem_bas, "class_oos")  <- class_oos
+  attr(.cheem_bas, "predict_parts") <- .parts
   if(keep_large_intermediates == TRUE){
     attr(.cheem_bas, "randomForest") <- .rf
     attr(.cheem_bas, "explain")      <- .ex_rf
@@ -385,7 +385,7 @@ local_attribution_list <- function(
   return(ret)
 }
 
-### EMA paper examples, recreating source ----
+## EMA paper examples, recreating source ----
 #' @examples 
 #' ## Working form source examples:
 #' if(F) ## Working from:
@@ -428,3 +428,194 @@ local_attribution_list <- function(
 #' 
 #' df_local_attr <- df_scree_local_attr(shap_henry)
 #' v <- tourr::normalise(df_local_attr$median_local_attr)
+
+
+#' @example
+#' ## Discrete supervised classification
+#' dat <- spinifex::scale_sd(tourr::flea[, 1:6])
+#' clas <- flea$species
+#' tgt_obs <- 10 ## row number in 1:nrow(dat)
+#' tgt_var <- clas == clas[tgt_obs] ## Or regression on a continuous var not in data.
+#' 
+#' ## Random forest, with holdout_rownum removed
+#' .p <- ncol(dat)
+#' .rf <- randomForest::randomForest(tgt_var~.,
+#'                                  data = data.frame(tgt_var, dat),
+#'                                  mtry = if(is.discrete(tgt_var)) sqrt(.p) else .p / 3L)
+#' ## Explainer of the random forest model
+#' expl <- DALEX::explain(model = .rf,
+#'                        data = dat,
+#'                        y = tgt_var,
+#'                        label = "local attribution of random forest model")
+#' 
+#' system.time(
+#'   cheem_bas <- basis_cheem_INSAMP(dat, tgt_var, clas, tgt_obs, expl)
+#' )[3] ## .16 sec
+#' print(cheem_bas)
+#' plot(cheem_bas)
+basis_cheem_INSAMP <- function(
+  data, target_var, class = NULL, new_observation_rownum,
+  explainer,
+  parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
+  parts_B = 10,
+  parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
+  ...
+){
+  ## Assumptions
+  requireNamespace("randomForest")
+  requireNamespace("DALEX")
+  #requireNamespace("treeshap") ## Not explicitly used, maybe implicitly called in DALEX?
+  data <- as.data.frame(data)
+  ## Initialize held out observation for data, target var, optional class var
+  
+  ## If class is used
+  if(is.null(class) == FALSE) class <- as.factor(class)
+  
+  #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
+  parts_type <- match.arg(parts_type)
+
+  .parts <- DALEX::predict_parts(explainer = explainer, ## Takes some time.
+                                 new_observation = data[new_observation_rownum,, drop= FALSE],
+                                 type = parts_type,
+                                 N = parts_N,
+                                 B = parts_B,
+                                 ...)
+  attr(.parts, "yhats_distribution") <- NULL ## remove ~90% the size, without hurting plot.predict_parts
+  
+  #### The local attribution of those parts [1, p] vector in SHAP order.
+  ## Remade from: iBreakDown:::print.break_down_uncertainty
+  .df_la <- data.frame(
+    label = tapply(.parts$label, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+    variable_name = tapply(.parts$variable_name, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+    variable_value = tapply(.parts$variable_value, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE), ## oos variable value
+    median_local_attr = tapply(.parts$contribution, paste(.parts$label, .parts$variable, sep = ": "), median, na.rm = TRUE)
+  )
+  ## Reorder .df_la back to original data colname order
+  .row_idx <- order(match(.df_la$variable_name, colnames(data)))
+  .df_la   <- .df_la[.row_idx, ]
+  
+  # .la_r_fct_lvl <- gsub(".*\\.","", .parts$label)
+  # .fct_lvl <- if(length(unique(.la_r_fct_lvl)) == 1L){""}else{.la_r_fct_lvl}
+  ## What if factor was tested instead of boolean?
+  .guess_bas.dat_ratio <- nrow(.df_la) / ncol(data)
+  if(.guess_bas.dat_ratio != 1L)
+    stop(paste0(
+      "Local attribution has ", .guess_bas.dat_ratio,
+      " times as many rows as the columns of the data. Make sure you didn't want to test a boolean such as tgt_var <- clas == clas[new_obs]. If you need this loop over a test for each factor level."))
+  # paste0(substitute(class), "=", gsub(".*\\.","", .parts$label))
+  
+  ## basis_type is NULL; format parts local attributes
+  .cheem_bas <- as.matrix(tourr::normalise(.df_la$median_local_attr))
+  colnames(.cheem_bas) <- parts_type
+  rownames(.cheem_bas) <- .df_la$variable_name
+  
+  ## Keep attributes
+  attr(.cheem_bas, "class") <- c("basis_cheem_INSAMP", "matrix")
+  attr(.cheem_bas, "data") <- as.matrix(data)
+  attr(.cheem_bas, "new_observation_rownum")<- new_observation_rownum
+  attr(.cheem_bas, "obs_class") <- class
+  attr(.cheem_bas, "predict_parts") <- .parts
+  
+  ## Return
+  return(.cheem_bas)
+}
+
+## Print cheem_bases as a numeric matrix without showing all the attributes.
+print.basis_cheem_INSAMP <- function (x, ...){
+  attr(x, "data") <- NULL
+  attr(x, "new_observation_rownum")<- NULL
+  attr(x, "obs_class") <- NULL
+  attr(x, "predict_parts") <- NULL
+  NextMethod()
+}
+
+
+#' @example
+#' ## Discrete supervised classification
+#' dat <- spinifex::scale_sd(tourr::flea[, 1:6])
+#' clas <- flea$species
+#' tgt_obs <- 10 ## row number in 1:nrow(dat)
+#' tgt_var <- clas == clas[tgt_obs] ## Or regression on a continuous var not in data.
+#' 
+#' ## Random forest, with holdout_rownum removed
+#' .p <- ncol(dat)
+#' rf <- randomForest::randomForest(tgt_var~.,
+#'                                  data = data.frame(tgt_var, dat),
+#'                                  mtry = if(is.discrete(tgt_var)) sqrt(.p) else .p / 3L)
+#' ## Explainer of the random forest model
+#' expl <- DALEX::explain(model = rf,
+#'                        data = dat,
+#'                        y = tgt_var,
+#'                        label = "local attribution of random forest model")
+#' 
+#' system.time(
+#'   cheem_bas <- basis_cheem_INSAMP(dat, tgt_var, clas, tgt_obs, rf, expl)
+#' )[3] ## .16 sec
+#' print(cheem_bas)
+#' (gg <-  plot(cheem_bas))
+#' 
+#' if(F)
+#'   ggsave("PoC_plot_cheem.pdf", ggcheem_proj, device ="pdf", width = 6, height = 3, units="in")
+autoplot.basis_cheem_INSAMP <- plot.basis_cheem_INSAMP <- function(
+  cheem_basis, show_parts = TRUE,
+  new_obs_identity_args =
+    if(ncol(cheem_basis) >= 2){list(color = "red", size = 5L, shape = 8L)}else
+      list(color = "red", size = 1.5, linetype = 2L, length = unit(1, "npc"), alpha = .5),
+  ...){ ## Passed to plot.predict_parts()
+  .data <- attributes(cheem_basis)$data
+  .new_observation_rownum <- attributes(cheem_basis)$new_observation_rownum
+  .obs_class <- attributes(cheem_basis)$obs_class
+  .cn <- colnames(cheem_basis)
+  
+  ## Initialize ggplot_tour()
+  gg <- ggplot_tour(basis_array = cheem_basis, data = .data)
+  
+  ## ooo projection not done in view_frames ## ooo == "Odd one out" no longer out of sample
+  .ooo_proj <- data.frame(.data[.new_observation_rownum, ] %*% cheem_basis)
+  
+  ## 2D geom_point and call over ooo_args:
+  if(ncol(cheem_basis) == 2L){
+    .ooo_pt_func <- function(...)
+      suppressWarnings(geom_point(
+        aes_string(cheem_basis = .cn[1L], y = .cn[2L]), .ooo_proj, ...))
+    .ooo_pt_call <- .ooo_pt_func(new_obs_identity_args)
+    .ooo_pt_call <- do.call(.oos_pt_func, new_obs_identity_args)
+    
+    ## 2D data ggproto
+    .ggp_data <- list(
+      ggproto_data_points(aes_args = list(color = .obs_class, shape = .obs_class)),
+      ggproto_basis_axes(),
+      labs(x = .cn[1L], y = .cn[2L]),
+      .oos_pt_call)
+  }
+  
+  ## 1D geom_hist over oos args:
+  if(ncol(cheem_basis) == 1L){
+    .oos_rug_func <- function(...)
+      suppressWarnings(geom_rug(
+        aes_string(x = .cn[1L]), .ooo_proj, ...))
+    .oos_rug_call <- do.call(.oos_rug_func, new_obs_identity_args)
+    
+    ## 1D data ggproto
+    .ggp_data <- list(
+      ggproto_data_density1d_rug(aes_args = list(color = .obs_class, fill = .obs_class)),
+      ggproto_basis_axes1d(),
+      labs(x = .cn[1L]),
+      .oos_rug_call)
+  }
+  
+  ## spinifex::view_frame(data_else)
+  gg <- gg +
+    ggproto_data_background(gridlines = FALSE) +
+    .ggp_data +
+    theme(axis.title = element_text())
+  
+  ## Plot(predict_parts(), by patchwork?
+  if(show_parts == TRUE){
+    require("patchwork")
+    .parts <- attributes(cheem_basis)$predict_parts
+    gg <- gg + plot(.parts, ...)
+  }
+  
+  return(gg)
+}
