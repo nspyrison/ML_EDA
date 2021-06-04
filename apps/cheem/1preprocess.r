@@ -87,16 +87,16 @@ dat <- dat %>% select(-value)
   sort(decreasing = TRUE)
 maha_lookup_df <- data.frame(id = 1:nrow(dat),
                              name = rownames(dat),
-                             dist = round(.maha_dist, digits = 1L),
-                             value = tgt_var,
-                             bmi = dat$bmi,
-                             age = dat$age,
-                             atk = dat$atk,
-                             def = dat$def,
-                             acc = dat$acc,
-                             mvm = dat$mvm,
-                             pwr = dat$pwr,
-                             gk  = dat$gk)
+                             dist = round(.maha_dist, digits = 1L))#,
+                             # value = tgt_var,
+                             # bmi = dat$bmi,
+                             # age = dat$age,
+                             # atk = dat$atk,
+                             # def = dat$def,
+                             # acc = dat$acc,
+                             # mvm = dat$mvm,
+                             # pwr = dat$pwr,
+                             # gk  = dat$gk)
 
 
 

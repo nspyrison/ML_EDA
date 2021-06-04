@@ -16,10 +16,12 @@ server <- function(input, output, session){
     tictoc::tic(paste0("calc basis_cheem_INSAMP, input$lookup_rownum:", input$lookup_rownum))
     cheem_bas <- basis_cheem_INSAMP(dat, tgt_var, NULL, input$lookup_rownum, expl)
     tictoc::toc()
-    gg <- plot(cheem_bas)
+    
+    gg <- plot.basis_cheem_INSAMP(cheem_bas)
+    
     return(gg)
   })
-  output$cheem_plot <- renderPrint({cheem_plot()})
+  output$cheem_plot <- renderPlot({cheem_plot()})
   
   ### maha_lookup_DT -----
   maha_lookup_DT <- reactive({

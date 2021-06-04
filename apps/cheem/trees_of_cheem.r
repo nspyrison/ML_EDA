@@ -220,40 +220,41 @@ view_cheem <- autoplot.cheem_basis <- plot.cheem_basis <- function(
   gg <- ggplot_tour(basis_array = cheem_basis,data = .data_else)
   
   ## oos projection not done in view_frames
-  .proj_new_obs <- data.frame(.data_oos %*% cheem_basis)
+  .oos_proj <- data.frame(.data_oos %*% cheem_basis)
+  .a_args <- list() ## Init
   
   ## 2D geom_point and call over oos_args:
   if(ncol(cheem_basis) == 2L){
     .oos_pt_func <- function(...)
       suppressWarnings(geom_point(
         aes_string(x = .cn[1L], y = .cn[2L]), 
-        .proj_new_obs, ...))
+        .oos_proj, ...))
     .oos_pt_call <- .oos_pt_func(oos_identity_args)
     .oos_pt_call <- do.call(.oos_pt_func, oos_identity_args)
     
     ## 2D data ggproto
-    .ggp_data <- list(ggproto_data_points(
-      aes_args = list(color = .class_else, shape = .class_else)),
-      ggproto_basis_axes(),
-      labs(x = .cn[1L], y = .cn[2L]),
-      .oos_pt_call
-    )
+    if(is.null(.class_else) == FALSE) 
+      .a_args <- list(color = .obs_class, shape = .obs_class)
+    .ggp_data <- list(ggproto_data_points(aes_args = .a_args),
+                      ggproto_basis_axes(),
+                      labs(x = .cn[1L], y = .cn[2L]),
+                      .oos_pt_call)
   }
   
   ## 1D geom_hist over oos args:
   if(ncol(cheem_basis) == 1L){
     .oos_rug_func <- function(...)
       suppressWarnings(geom_rug(
-        aes_string(x = .cn[1L]), .proj_new_obs, ...))
+        aes_string(x = .cn[1L]), .oos_proj, ...))
     .oos_rug_call <- do.call(.oos_rug_func, oos_identity_args)
     
     ## 1D data ggproto
-    .ggp_data <- list(ggproto_data_density1d_rug(
-      aes_args = list(color = .class_else, fill = .class_else)),
-      ggproto_basis_axes1d(),
-      labs(x = .cn[1L]),
-      .oos_rug_call
-    )
+    if(is.null(.class_else) == FALSE) 
+      .a_args <- list(color = .obs_class, fill = .obs_class)
+    .ggp_data <- list(ggproto_data_density1d_rug(aes_args = .a_args),
+                      ggproto_basis_axes1d(),
+                      labs(x = .cn[1L]),
+                      .oos_rug_call)
   }
   
   ## spinifex::view_frame(data_else)
@@ -572,6 +573,8 @@ autoplot.basis_cheem_INSAMP <- plot.basis_cheem_INSAMP <- function(
   
   ## ooo projection not done in view_frames ## ooo == "Odd one out" no longer out of sample
   .ooo_proj <- data.frame(.data[.new_observation_rownum, ] %*% cheem_basis)
+  .a_args <- list() ## Init
+  if(is.null(.obs_class) == FALSE) .a_args <- list(color = .obs_class, shape = .obs_class)
   
   ## 2D geom_point and call over ooo_args:
   if(ncol(cheem_basis) == 2L){
@@ -582,11 +585,12 @@ autoplot.basis_cheem_INSAMP <- plot.basis_cheem_INSAMP <- function(
     .ooo_pt_call <- do.call(.oos_pt_func, new_obs_identity_args)
     
     ## 2D data ggproto
-    .ggp_data <- list(
-      ggproto_data_points(aes_args = list(color = .obs_class, shape = .obs_class)),
-      ggproto_basis_axes(),
-      labs(x = .cn[1L], y = .cn[2L]),
-      .oos_pt_call)
+    if(is.null(.obs_class) == FALSE)
+      .a_args <- list(color = .obs_class, shape = .obs_class)
+    .ggp_data <- list(ggproto_data_points(aes_args = .a_args),
+                      ggproto_basis_axes(),
+                      labs(x = .cn[1L], y = .cn[2L]),
+                      .oos_pt_call)
   }
   
   ## 1D geom_hist over oos args:
@@ -597,11 +601,12 @@ autoplot.basis_cheem_INSAMP <- plot.basis_cheem_INSAMP <- function(
     .oos_rug_call <- do.call(.oos_rug_func, new_obs_identity_args)
     
     ## 1D data ggproto
-    .ggp_data <- list(
-      ggproto_data_density1d_rug(aes_args = list(color = .obs_class, fill = .obs_class)),
-      ggproto_basis_axes1d(),
-      labs(x = .cn[1L]),
-      .oos_rug_call)
+    if(is.null(.obs_class) == FALSE)
+      .a_args <- list(color = .obs_class, fill = .obs_class)
+    .ggp_data <- list(ggproto_data_density1d_rug(aes_args = .a_args),
+                      ggproto_basis_axes1d(),
+                      labs(x = .cn[1L]),
+                      .oos_rug_call)
   }
   
   ## spinifex::view_frame(data_else)
