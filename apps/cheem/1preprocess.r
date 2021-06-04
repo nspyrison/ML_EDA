@@ -3,7 +3,6 @@ if(F){
   dat
   tgt_var
   maha_lookup_df
-  rf
   expl
 }
 
@@ -88,7 +87,7 @@ dat <- dat %>% select(-value)
   sort(decreasing = TRUE)
 maha_lookup_df <- data.frame(id = 1:nrow(dat),
                              name = rownames(dat),
-                             dist = .maha_dist,
+                             dist = round(.maha_dist, digits = 1L),
                              value = tgt_var,
                              bmi = dat$bmi,
                              age = dat$age,
@@ -126,7 +125,7 @@ if(F){
        maha_lookup_df,
        expl,
        file = "1preprocess.RData")
-  file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData")
+  file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
 }
 

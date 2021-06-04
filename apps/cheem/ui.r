@@ -16,10 +16,14 @@ require("plotly")
 ## Local functions
 source("trees_of_cheem.r")   ## Cheem functions
 source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+## Load objs
+load("./data/1preprocess.RData") 
+## loads the following objects: dat, tgt_var, maha_lookup_df, expl
 
-source("1preprocess.r") ## New (spinifex) ggproto_* api
-## Not run, open local function files
-if(F){
+if(F){ ## Not run, source/open local function files relative to proj
+  source("./apps/cheem/trees_of_cheem.r")
+  source("./apps/cheem/spinifex_ggproto.r")
+  
   file.edit("./apps/cheem/trees_of_cheem.r")
   file.edit("./apps/cheem/spinifex_ggproto.r")
   file.edit("./apps/cheem/1preprocess.r")
@@ -37,24 +41,23 @@ require("DT") ## For html table and buttons
 
 
 
-##### tab2_cheem ----
-tab1_explore <- tabPanel("Cheem", sidebarLayout(
-  fluid = FALSE,
-  ## mainPanel: Tourr, tSNE
-  mainPanel(width = 12L,
-            h1("Fifa data, 2020 season"),
-            
+##### tab1_cheem ----
+tab1_cheem <- tabPanel("Cheem",
+                       h1("Fifa data, 2020 season"),
+                       sidebarLayout(
+  ## sidePanel ----
+  sidebarPanel(width = 3L,
+               ## Maha lookup
+               h2("Mahalonobis lookup table"),
+               DT::DTOutput("maha_lookup_DT", width = "100%") %>%
+                 shinycssloaders::withSpinner(type = 8L)
+  ),
+  ## mainPanel ----
+  mainPanel(width = 9L,
             ## Cheem plot 
             h2("Cheem plot"),
-            numericInput("ooo_rownum", "Player id", 1L, 1L, 5000L),
+            numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L),
             plotOutput("cheem_plot", width = "100%") %>%
-              shinycssloaders::withSpinner(type = 8L),
-            
-            ## Maha lookup
-            h2("Mahalonobis lookup table"),
-            textInput("search_chr", "search player name:", "",
-                      placeholder = "<try searching on sur name>"),
-            DT::DTOutput("maha_lookup_DT", width = "100%") %>%
               shinycssloaders::withSpinner(type = 8L),
             
             # ## tSNE
