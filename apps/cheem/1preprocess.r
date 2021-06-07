@@ -114,7 +114,7 @@ system.time(
 expl <- DALEX::explain(model = .rf,
                        data = dat,
                        y = tgt_var,
-                       label = "SHAP-ley values of Rand. Forest")
+                       label = "SHAP-ley values of random forest")
 )
 
 

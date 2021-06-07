@@ -433,7 +433,8 @@ ggproto_data_points <- function(aes_args = list(),
 #' animate_gganimate(gg) ## ~48 seconds 
 #' tictoc::toc()
 ggproto_data_density1d_rug <- function(aes_args = list(),
-                                       identity_args = list()){
+                                       identity_args = list(),
+                                       density_position = c("stack", "identity")){
   ## Assumptions
   if(is.null(.spinifex_df_data) == TRUE) return()
   position <- "center" ## Data assumed center.
@@ -454,9 +455,10 @@ ggproto_data_density1d_rug <- function(aes_args = list(),
     ggplot2::aes(x = x, frame = frame, ...)
   .aes_call <- do.call(.aes_func, aes_args)
   ## do.call geom over identity_args
+  density_position <- match.arg(density_position)
   .geom_func1 <- function(...) suppressWarnings(ggplot2::geom_density(
     mapping = .aes_call, data = .df_data, ...,
-    position = "stack", color = "black"))
+    position = density_position, color = "black"))
   .geom_call1 <- do.call(.geom_func1, identity_args)
   ## do.call geom over identity_args #2:
   .geom_func2 <- function(...) suppressWarnings(ggplot2::geom_rug(
