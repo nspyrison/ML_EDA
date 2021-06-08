@@ -198,22 +198,22 @@ bas_pca4 <- basis_pca(dat, d = 4)
 proj_pca4 <- dat %*% bas_pca4
 colnames(proj_pca4) <- paste0("PC", 1:4)
 GGally::ggpairs(as.data.frame(proj_pca4), 
-                mapping = aes(color = clas), 
-                lower = list(continuous = wrap("points", alpha = 0.3)))
+                mapping = aes(color = clas, shape = clas), 
+                lower = list(continuous = wrap("points", alpha = 0.3, size = 2)))
 
 
 bas_olda4 <- basis_olda(dat, clas, d = 4)
 proj_olda4 <- dat %*% bas_olda4
 colnames(proj_olda4) <- paste0("OLDA", 1:4)
 GGally::ggpairs(as.data.frame(proj_olda4), 
-                mapping = aes(color = clas), 
-                lower = list(continuous = wrap("points", alpha = 0.3)))
+                mapping = aes(color = clas, shape = clas), 
+                lower = list(continuous = wrap("points", alpha = 0.3, size = 2)))
 ```
 
 Not a lot of linear separability.
 
 
-# An aside: DALEX::plot.predict_parts() symmetrically robust?: yes
+# Aside1: DALEX::plot.predict_parts() symmetrically robust?: yes
 
 In short, _yes_.
 
@@ -247,3 +247,9 @@ plot(.parts) + plot(.parts2)
 print("Great! robust to both the varaible order both before and after")
 ```
 
+# Aside2: var order is different from the order of data or ordered magnetude
+
+1) How is it defined? 
+2) Can we be confident that the order from DALEX, treeshap, and fastshap will be the same?
+-- it looks like treeshap::plot_contibution is in desc magnitude order, while DALEX is not.
+3) Shap matrices are stored in data order, should shap order be saved? or only calculated as needed?
