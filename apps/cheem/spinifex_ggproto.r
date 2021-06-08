@@ -42,7 +42,7 @@ ggplot_tour <- function(basis_array, data = NULL,
   ## Assign hidden prepared dataframes
   assign(x = ".spinifex_df_basis", value = df_basis, envir = globalenv())
   assign(x = ".spinifex_df_data",  value = df_data,  envir = globalenv())
-  assign(x = ".spinifex_scale_to", value = scale_to,  envir = globalenv())
+  assign(x = ".spinifex_scale_to", value = scale_to, envir = globalenv())
   
   ## Also behave as ggpot() with overwritable theme settings
   ret <- ggplot2::ggplot() + spinifex::theme_spinifex()
