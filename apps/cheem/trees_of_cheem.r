@@ -25,8 +25,8 @@ draw_observation <- function(data){
 #' .rf <- ranger::ranger(y ~ ., data = data.frame(y, xdat))
 #'  df_shap <- treeshap_df(.rf, data = xdat)
 treeshap_df <- function(randomForest_model, data){
-  .rfu <- treeshap::randomForest.unify(.rf, xdat)
-  .tshap_ls <- treeshap::treeshap(.rfu, x = xdat) 
+  .rfu <- treeshap::randomForest.unify(.rf, data)
+  .tshap_ls <- treeshap::treeshap(.rfu, x = data) 
   .tshap_ls <- .tshap_ls[c(1,4)]
   ## Keeping only c(1,4); reduces ~98.5% of the obj size, keep shap values make data attr.
   ## But, we lose the iBreakdown-like plot of treeshap::plot_contribution when we take this apart.

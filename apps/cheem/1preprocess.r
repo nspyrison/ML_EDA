@@ -3,11 +3,10 @@ if(F){
   dat
   tgt_var
   maha_lookup_df
-  expl
-}
-
-## Created from analysis in:
-if(F){
+  #expl
+  treeshap_df
+  
+  ## Created from analysis in:
   file.edit("./vignettes/cheem_fifa.rmd")
   file.edit("./vignettes/cheem_varieties.rmd")
 }
@@ -29,21 +28,23 @@ if(F){ ## Manually run to view file:
 
 ## Setup ------
 .raw <- DALEX::fifa
+
 ## I know there are too many features, so we'll remove some correlated variables.
 
 if(F){
   ## Correlation embedding -----
   str(.raw)
   tic("correlation")
-  cor_mat <- .raw %>% dplyr::select(-c(`nationality`)) %>% 
-    cor()
-  corrplot::corrplot(cor_mat,
-                     method = "circle", ## geom
-                     type = "upper", ## only upper triangle
-                     diag = F, ## remove auto correlation
-                     order = "FPC", ## First principal component
-                     tl.col = "black", tl.srt = 90, ## Text label color and rotation
-                     tl.pos = "td")
+  .raw %>% 
+    dplyr::select(-c(`nationality`)) %>%
+    cor() %>%
+    corrplot::corrplot(cor_mat,
+                       method = "circle", ## geom
+                       type = "upper", ## only upper triangle
+                       diag = F, ## remove auto correlation
+                       order = "FPC", ## First principal component
+                       tl.col = "black", tl.srt = 90, ## Text label color and rotation
+                       tl.pos = "td")
   toc()
 }
 
@@ -73,8 +74,9 @@ dat <- .raw %>% dplyr::select(-c(`nationality`)) %>% dplyr::mutate(
   gk = (goalkeeping_diving+goalkeeping_positioning+goalkeeping_reflexes+
           goalkeeping_handling+goalkeeping_kicking)/5,
 )
-## starting with 42 variables, we remove `nationality`, and 
-## aggregate the other 41 variables into 9 aggregate dimensions based on like correlation of variable, including `value` our tgt variable.
+## Starting with 42 variables, we remove `nationality`, and aggregate the 
+#### other 41 variables into 9 aggregate dimensions based on like correlation 
+#### of variable, including `value` our tgt variable.
 
 ## Normalize each column by its standard deviations
 dat <- spinifex::scale_sd(dat) %>% as.data.frame()
@@ -99,8 +101,7 @@ maha_lookup_df <- data.frame(id = 1:nrow(dat),
                              # gk  = dat$gk)
 
 
-
-## Random forest model -----
+## Random forest model {randomForest} -----
 .p <- ncol(dat)
 .rf_mtry <- if(is.discrete(tgt_var)) sqrt(.p) else .p / 3L
 system.time(
@@ -109,13 +110,30 @@ system.time(
                                     mtry = .rf_mtry)
 )
 
-## Explainer -----
-system.time(
-expl <- DALEX::explain(model = .rf,
-                       data = dat,
-                       y = tgt_var,
-                       label = "SHAP-ley values of random forest")
-)
+## Explainer {DALEX} -----
+# system.time(
+# expl <- DALEX::explain(model = .rf,
+#                        data = dat,
+#                        y = tgt_var,
+#                        label = "SHAP-ley values of random forest")
+# )
+
+## shap_df {treeshap} ------
+{
+  Sys.time()
+  tic("treeshap")
+  .r_split <- seq(0, 5000, by = 500)
+  .r_split[1] <- 1
+  for(i in 1:10){
+    Sys.time()
+    tic(paste0("treeshap: ", i))
+    .this_dat <- dat[.r_split[i]:.r_split[i + 1], ]
+    .shap_df <- treeshap_df(randomForest_model = .rf, data = dat)
+    assign(paste0("shap_df", i), .shap_df, envir = globalenv())
+  }
+  toc()
+} ##
+
 
 
 ## EXPORT OBJECTS ----
@@ -123,49 +141,10 @@ if(F){
   save(dat,
        tgt_var,
        maha_lookup_df,
-       expl,
+       # expl,
+       shap_df,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
-}
-
-
-
-## local_attribution_list NOT RUN -----
-if(F){
-  tictoc::tic("local_attribution_list")
-  la_ls <- local_attribution_list(dat, tgt_var)
-  tictoc::toc()
-  ### Failing in the loop; DALEX::predict_parts? not when manually run, may want to try  running outside of doParallel, with reduced RFs...
-  # Error in { : 
-  #     task 1 failed - "no applicable method for 'predict' applied to an object of class "c('randomForest.formula', 'randomForest')""
-  str(la_ls)
-}
-
-## testing and planning ----
-
-if(F){
-  tictoc::tic()
-  cheem <- basis_cheem(dat[1:500,], 42, tgt_var[1:500,])
-  tictoc::toc()
-  str(cheem)
-  object.size(cheem)
-  
-  ## 3.8 Hrs for 5000x30sec / 11 cores
-  ## 27.8 Gb for 694736 bytes * 5000 in Gb
-  ## .67 Gb  for  16912 bytes * 5000 in Gb
-  z <- cheem
-  attr(z, "data_else") <- NULL
-  str(z)
-  object.size(z)
-  
-  
-  for(i in c(1, 3, 7, 10)){
-    tictoc::tic(paste0("B = ",i))
-    print(basis_cheem(dat, 42, tgt_var, parts_B = i))
-    tictoc::toc()
-  }
-  
-  
 }
 

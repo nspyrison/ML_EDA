@@ -18,7 +18,7 @@ source("trees_of_cheem.r")   ## Cheem functions
 source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
 ## Load objs
 load("./data/1preprocess.RData") 
-## loads the following objects: dat, tgt_var, maha_lookup_df, expl
+## Loads the following objects: dat, tgt_var, maha_lookup_df, shap_df
 
 if(F){ ## Not run, source/open local function files relative to proj
   source("./apps/cheem/trees_of_cheem.r")
