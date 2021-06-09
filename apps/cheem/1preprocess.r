@@ -119,21 +119,24 @@ system.time(
 # )
 
 ## shap_df {treeshap} ------
-{
+if(F){
   Sys.time()
   tic("treeshap")
   .r_split <- seq(0, 5000, by = 500)
   .r_split[1] <- 1
-  for(i in 1:10){
+  i<-1
+  #for(i in 1:10){
     Sys.time()
     tic(paste0("treeshap: ", i))
     .this_dat <- dat[.r_split[i]:.r_split[i + 1], ]
+    debugonce(treeshap_df)
     .shap_df <- treeshap_df(randomForest_model = .rf, data = dat)
     assign(paste0("shap_df", i), .shap_df, envir = globalenv())
-  }
+    toc()
+  #}
   toc()
-} ##
-
+  ##
+}
 
 
 ## EXPORT OBJECTS ----

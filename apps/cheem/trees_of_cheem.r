@@ -22,8 +22,10 @@ draw_observation <- function(data){
 #' y <- dat$m2.price
 #' 
 #' ## Fit a {randomForest} model, slower fit, but faster shap than ranger
-#' .rf <- ranger::ranger(y ~ ., data = data.frame(y, xdat))
+#' .rf <- randomForest::randomForest(y ~ ., data = data.frame(y, xdat))
+#' system.time(
 #'  df_shap <- treeshap_df(.rf, data = xdat)
+#' )[3]
 treeshap_df <- function(randomForest_model, data){
   .rfu <- treeshap::randomForest.unify(.rf, data)
   .tshap_ls <- treeshap::treeshap(.rfu, x = data) 
