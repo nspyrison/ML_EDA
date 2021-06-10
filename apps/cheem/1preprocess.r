@@ -5,6 +5,7 @@ if(F){
   maha_lookup_df
   #expl
   treeshap_df
+  shap_dist_mat
   
   ## Created from analysis in:
   file.edit("./vignettes/cheem_fifa.rmd")
@@ -38,8 +39,7 @@ if(F){
   .raw %>% 
     dplyr::select(-c(`nationality`)) %>%
     cor() %>%
-    corrplot::corrplot(cor_mat,
-                       method = "circle", ## geom
+    corrplot::corrplot(method = "circle", ## geom
                        type = "upper", ## only upper triangle
                        diag = F, ## remove auto correlation
                        order = "FPC", ## First principal component
@@ -119,25 +119,44 @@ system.time(
 # )
 
 ## shap_df {treeshap} ------
-if(F){
-  Sys.time()
-  tic("treeshap")
-  .r_split <- seq(0, 5000, by = 500)
-  .r_split[1] <- 1
-  i<-1
-  #for(i in 1:10){
-    Sys.time()
-    tic(paste0("treeshap: ", i))
-    .this_dat <- dat[.r_split[i]:.r_split[i + 1], ]
-    debugonce(treeshap_df)
-    .shap_df <- treeshap_df(randomForest_model = .rf, data = dat)
-    assign(paste0("shap_df", i), .shap_df, envir = globalenv())
-    toc()
-  #}
-  toc()
-  ##
-}
+dat_1 <- dat[0001:1000, ]
+dat_2 <- dat[1001:2000, ]
+dat_3 <- dat[2001:3000, ]
+dat_4 <- dat[3001:4000, ]
+dat_5 <- dat[4001:5000, ]
 
+tic("treeshap")
+gc();Sys.time()
+(mbm1 <- microbenchmark::microbenchmark(
+  fifa_fifth1 = shap_df1 <- treeshap_df(.rf, dat_1),
+  fifa_fifth2 = shap_df2 <- treeshap_df(.rf, dat_2),
+  fifa_fifth3 = shap_df3 <- treeshap_df(.rf, dat_3),
+  times = 1L
+))
+beepr::beep(1)
+gc();Sys.time()
+(mbm2 <- microbenchmark::microbenchmark(
+  fifa_fifth4 = shap_df4 <- treeshap_df(.rf, dat_4),
+  fifa_fifth5 = shap_df5 <- treeshap_df(.rf, dat_5),
+  times = 1L
+))
+beepr::beep(4)
+gc();Sys.time()
+toc()
+shap_df <- rbind(shap_df1, shap_df2, shap_df3, shap_df4, shap_df5)
+attr(shap_df, "data")  <- dat ## Similarly append data
+if(F)
+  rm(list= c(paste0("shap_df", 1:5L), paste0("dat_", 1:5L)))
+
+
+## shap_dm ------
+if(F){
+  tic("shap distance matrix")
+  shap_dist_mat <- as.matrix(dist(shap_df))
+  colnames(shap_dist_mat) <- NULL
+  rownames(shap_dist_mat) <- NULL
+  toc() ## 1.46 Sec
+}
 
 ## EXPORT OBJECTS ----
 if(F){
@@ -146,6 +165,7 @@ if(F){
        maha_lookup_df,
        # expl,
        shap_df,
+       shap_dist_mat,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
