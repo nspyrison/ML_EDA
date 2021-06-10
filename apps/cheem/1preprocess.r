@@ -5,8 +5,8 @@ if(F){
   maha_lookup_df
   #expl
   treeshap_df
-  shap_dist_mat
-  
+  #shap_dist_mat
+  shap_dist_quartile
   ## Created from analysis in:
   file.edit("./vignettes/cheem_fifa.rmd")
   file.edit("./vignettes/cheem_varieties.rmd")
@@ -149,12 +149,26 @@ if(F)
   rm(list= c(paste0("shap_df", 1:5L), paste0("dat_", 1:5L)))
 
 
-## shap_dm ------
+## shap_dist_mat, shap_dist_quartile ------
 if(F){
   tic("shap distance matrix")
   shap_dist_mat <- as.matrix(dist(shap_df))
   colnames(shap_dist_mat) <- NULL
   rownames(shap_dist_mat) <- NULL
+  ## Init
+  quantiles <- data.frame(matrix(NA, ncol=5))
+  colnames(quantiles) <- paste0(seq(0, 100, 25), "pct")
+  shap_dist_quartile <- data.frame(matrix(NA, 5000, 5000))
+  sapply(1:ncol(shap_dist_mat), function(i){
+    vect <- shap_dist_mat[, i]
+    quantiles[i,] <<- quantile(vect, probs = seq(0, 1, .25))
+    shap_dist_quartile[, i] <<- dplyr::case_when(
+      vect >= quantiles[i, 1] & vect <= quantiles[i, 2] ~ 1L,
+      vect >= quantiles[i, 2] & vect <= quantiles[i, 3] ~ 2L,
+      vect >= quantiles[i, 3] & vect <= quantiles[i, 4] ~ 3L,
+      vect >= quantiles[i, 4] & vect <= quantiles[i, 5] ~ 4L)
+  })
+  hist(quantiles[,5])
   toc() ## 1.46 Sec
 }
 
@@ -165,7 +179,8 @@ if(F){
        maha_lookup_df,
        # expl,
        shap_df,
-       shap_dist_mat,
+       #shap_dist_mat,
+       shap_dist_quartile,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")

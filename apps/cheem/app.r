@@ -10,24 +10,32 @@ source("ui.r", local = TRUE, encoding = "utf-8")
 
 server <- function(input, output, session){
   
-  ### cheem_plot -----
-  cheem_plot <- reactive({
-    ## loaded objects: dat, tgt_var, maha_lookup_df, expl
-    tictoc::tic(paste0("calc basis_cheem_INSAMP, input$lookup_rownum:", input$lookup_rownum))
-    cheem_bas <- basis_cheem_INSAMP(dat, tgt_var, NULL, input$lookup_rownum, expl)
-    tictoc::toc()
-    
-    gg <- plot.basis_cheem_INSAMP(cheem_bas)
-    
-    return(gg)
+  
+  ### dat_w_shap_dist -----
+  shap_dist_fct <- reactive({
+    as.factor(shap_dist_quartile[, input$lookup_rownum])
   })
-  output$cheem_plot <- renderPlot({cheem_plot()})
+  
+  ### shap_ggpairs -----
+  shap_ggpairs <- reactive({
+    GGally::ggpairs(as.data.frame(shap_df[, 1:input$plot_cols]),
+                    mapping = aes(color = shap_dist_fct()),
+                    lower = list(continuous = wrap("points", alpha = 0.3))) +
+      ggtitle(paste0("SHAP space, colored by SHAP distance from obs# ", input$lookup_rownum))
+  })
+  output$shap_ggpairs <- renderPlot({shap_ggpairs()})
+  
+  ### var_ggpairs -----
+  var_ggpairs <- reactive({
+    GGally::ggpairs(as.data.frame(dat[, 1:input$plot_cols]),
+                    mapping = aes(color = shap_dist_fct()),
+                    lower = list(continuous = wrap("points", alpha = 0.3))) +
+      ggtitle(paste0("Variable space, colored by SHAP distance from obs# ", input$lookup_rownum))
+  })
+  output$var_ggpairs <- renderPlot({var_ggpairs()})
   
   ### maha_lookup_DT -----
   maha_lookup_DT <- reactive({
-    #maha_lookup_df
-    # ptn = paste0('^.*', input$search_chr, '.*?')
-    # ndx = grep(ptn, maha_lookup_df$name, perl=T)
     return(DT::datatable(maha_lookup_df[, 1L:3L], rownames = FALSE))
   })
   output$maha_lookup_DT <- DT::renderDT({maha_lookup_DT()})
@@ -74,7 +82,6 @@ server <- function(input, output, session){
   #   aes_var_nm <- input$aes_var_nm
   #   if(aes_var_nm %in% colnames(truthy_dat)){
   #     tnsne_proj$aes <- as.factor(truthy_dat[aes_var_nm][, 1L])
-  #     tsne_aes <- aes(tsne1, tsne2, rowname = rowname,
   #                     color = aes, shape = aes)
   #   }else{
   #     tsne_aes <- aes(tsne1, tsne2, rowname = rowname)

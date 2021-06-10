@@ -17,8 +17,10 @@ require("plotly")
 source("trees_of_cheem.r")   ## Cheem functions
 source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
 ## Load objs
-load("./data/1preprocess.RData") 
-## Loads the following objects: dat, tgt_var, maha_lookup_df, shap_df
+load("./data/1preprocess.RData")
+if(F)
+  load("./apps/cheem/data/1preprocess.RData")
+## Loads the following objects: dat, tgt_var, maha_lookup_df, shap_df, shap_dist_mat
 
 if(F){ ## Not run, source/open local function files relative to proj
   source("./apps/cheem/trees_of_cheem.r")
@@ -42,22 +44,32 @@ require("DT") ## For html table and buttons
 
 
 ##### tab1_cheem ----
-tab1_cheem <- tabPanel("Cheem",
-                       h1("Fifa data, 2020 season"),
+tab1_cheem <- tabPanel(title = "shap distance",
                        sidebarLayout(
   ## sidePanel ----
   sidebarPanel(width = 3L,
                ## Maha lookup
-               h2("Mahalonobis lookup table"),
+               h4("Mahalonobis lookup table"),
                DT::DTOutput("maha_lookup_DT", width = "100%") %>%
                  shinycssloaders::withSpinner(type = 8L)
   ),
   ## mainPanel ----
   mainPanel(width = 9L,
-            ## Cheem plot 
-            h2("Cheem plot"),
-            numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L),
-            plotOutput("cheem_plot", width = "100%") %>%
+            p("- Fifa 2020 data aggregated into 9 numeric variables."),
+            p("1) Extract the SHAP values for EACH observation (in-sample, obs of a random forest model, shap by {treeshap})."),
+            p("2) Create a distance matrix from the SHAP values."),
+            p("3) Find the quartiles levels of the distance matrix.",),
+            p("4) View SHAP and Variable space colored by levels in {shiny} app.",),
+            
+            h4("Colored by SHAP distance from this player:"),
+            fluidRow(
+              column(6L, numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L)),
+              column(6L, numericInput("plot_cols", "For first X columns [1, 8]", 3L, 1L, 8L),
+                     p("Render time: ~4 sec w/ 3 columns, ~33 sec w/ 8 columns."))
+            ),
+            plotOutput("shap_ggpairs", width = "100%") %>%
+              shinycssloaders::withSpinner(type = 8L),
+            plotOutput("var_ggpairs", width = "100%") %>%
               shinycssloaders::withSpinner(type = 8L),
             
             # ## tSNE
@@ -72,7 +84,7 @@ tab1_cheem <- tabPanel("Cheem",
 
 ##### tab2_about -----
 tab2_about <- tabPanel("About", fluidPage(
-  h2("Context & motivation:"),
+  h3("Context & motivation:"),
   p("Modern modeling faces a trade of between interprebility and accuracy of a model. 
     Black-box models use increasingly more and complex interaction terms between features. 
     Doing so allows them to be more accurate, but makes them unrealistically complex to parse and interpret the reasoning and weights used. 
@@ -96,7 +108,7 @@ tab2_about <- tabPanel("About", fluidPage(
 ###### Combined ui object ----
 ui <- fluidPage(theme = shinythemes::shinytheme("flatly"), 
                 ## Content:
-                navbarPage("Cheem, Intro",
+                navbarPage("Cheem",
                            tab1_cheem,
                            tab2_about)
 )
