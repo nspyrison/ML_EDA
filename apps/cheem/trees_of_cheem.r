@@ -8,11 +8,11 @@ require("ggplot2")
 is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
 {is.factor(x) || is.character(x) || is.logical(x)}
 
-draw_observation <- function(data){
+rnorm_observation <- function(data){
   c_mns <- apply(data, 2L, mean)
   c_var <- apply(data, 2L, var)
   obs_vec <- rnorm(ncol(data), c_mns, sqrt(c_var))
-  obs <- as.data.frame(matrix(obs_vec, nrow = 1, dimnames = list(NULL, colnames(data))))
+  obs <- as.data.frame(matrix(obs_vec, nrow = 1L, dimnames = list(NULL, colnames(data))))
   return(obs)
 }
 

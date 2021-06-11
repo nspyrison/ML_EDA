@@ -1,0 +1,162 @@
+---
+title: "Cheem sensitivity"
+author: "Nicholas Spyrison"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    theme: united
+editor_options:
+  chunk_output_type: console
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE, ## code
+  include    = TRUE, ## plots
+  eval       = TRUE, ## chunk
+  message    = FALSE,
+  warning    = FALSE,
+  error      = FALSE,
+  collapse   = TRUE,
+  cache      = TRUE,
+  cache.lazy = FALSE
+)
+## Set directory relative to package
+knitr::opts_knit$set(root.dir = '..')
+```
+
+# Requirements
+
+```{R}
+## Primary work packages
+require("DALEX")
+require("treeshap")
+require("caret") ## Encoding class vars
+require("spinifex")
+require("tourr")
+require("ggplot2")
+## EDA and utility
+require("palmerpenguins") ## penguins dataset
+require("GGally")
+require("tictoc")
+require("patchwork")
+require("plotly")
+## Local functions
+source("./apps/cheem/trees_of_cheem.r")   ## Cheem functions
+source("./apps/cheem/spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+## Not run, open local function files
+if(F){
+  file.edit("./apps/cheem/trees_of_cheem.r")
+  file.edit("./apps/cheem/spinifex_ggproto.r")
+}
+```
+
+# Data, palmerpenguins::penguins
+
+
+## Data setup
+
+```{r}
+raw <- palmerpenguins::penguins ## 5 missings, visdat::vis_miss(raw)
+raw_rmna <- raw[!is.na(raw$sex),]
+xdat <- spinifex::scale_sd(raw_rmna[, 3:6])
+clas1 <- raw_rmna$species
+clas2 <- raw_rmna$sex
+table(clas1) ## Unbalenced island obs
+table(clas2) ## Balanced sex
+
+## Encode classes {caret}
+library("caret")
+dv <- caret::dummyVars(" ~ .", data = raw_rmna)
+encoded <- data.frame(predict(dv, raw_rmna))
+str(encoded)
+detach("package:caret", unload = TRUE)
+encoded <- cbind(encoded[, 1:3], encoded[, 11:12], xdat)
+
+## Additional setup not used in local attribution matrix
+new_obs_x <- rnorm_observation(dat)
+```
+
+## EDA glimse
+
+```{r}
+bas_pca  <- basis_pca(xdat)
+bas_olda <- basis_olda(datx, clas1)
+
+require("patchwork")
+view_frame(bas_pca, data = xdat, 
+           aes_args = list(color = clas1, shape = clas2)) + 
+  ggtitle("PC1:2") +
+view_frame(bas_olda, data = xdat, 
+           aes_args = list(color = clas1, shape = clas2)) + 
+  ggtitle("OLDA1:2")
+
+# bas_olda4 <- basis_olda(xdat, clas1, d = 4)
+# proj <- xdat %*% bas_olda4
+# colnames(proj) <- paste0("OLDA", 1:4)
+# GGally::ggpairs(as.data.frame(proj), 
+#                 mapping = aes(color = clas1),
+#                 #, shap = clas2), ## Artifacts when using both classes... 
+#                 lower = list(continuous = wrap("points", alpha = 0.3)))
+```
+
+
+## RF Model, shap df
+
+```{r}
+rf_test <- as.integer(clas1 == levels(clas1)[1])
+.p <- ncol(xdat)
+.rf <- randomForest::randomForest(rf_test~.,
+                                  data = data.frame(rf_test, xdat),
+                                  mtry = if(is.discrete(clas1)) sqrt(.p) else .p / 3L)
+
+shap_df <- treeshap_df(.rf, xdat)
+```
+
+# Compare variable obs and SHAP obs
+
+Keep in mind this is testing for the first level of species.
+
+## Scatterplot matrix
+
+```{r}
+require("patchwork")
+str(xdat)
+str(shap_df)
+
+g1 <- GGally::ggpairs(as.data.frame(xdat), mapping = aes(color = clas1),
+                      lower = list(continuous = wrap("points", alpha = 0.3)))
+g2 <- GGally::ggpairs(as.data.frame(shap_df), mapping = aes(color = clas1),
+                      lower = list(continuous = wrap("points", alpha = 0.3)))
+g1 + g2
+```
+
+
+## NMDS
+
+Phrasing the question such as ~"explore the sensitivity of the SHAP values" reminds me of observational vacinity/distance, which reminds me of MDS, so let's look at NMDS with `MASS::isoMDS`
+
+```{r}
+require("spinifex")
+require("MASS")
+require('ggfortify')
+
+dim(spinifex::PimaIndiansDiabetes_wide)
+dat <- spinifex::PimaIndiansDiabetes_wide
+
+nmds <- MASS::isoMDS(dist(dat)) ## see nmds$points especially
+plot(nmds$points, type = "n")
+text(nmds$points, labels = as.character(1:nrow(dat)))
+
+#plotly::ggplotly(gg)
+```
+
+
+## Grand tour
+
+
+```{r}
+
+
+```
+
