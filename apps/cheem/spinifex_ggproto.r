@@ -30,13 +30,15 @@ ggplot_tour <- function(basis_array, data = NULL,
     scale_to <- data.frame(x = c(-1L, 1L), y = c(-1L, 1L))
   }else{
     d <- ncol(df_basis) - 2L
-    if(d >= 2L) scale_to <- df_data ##
-    if(d == 1L){
-      .den <- density(df_data[, 1L])
-      scale_to <- data.frame(x = quantile(df_data[, 1L], 
-                                          probs = c(.01, .99)),
-                             y = 1.8 * range(.den[[2L]]))
-    }else{browser();stop("scale_to missing from ggplot_tour() call.")}
+    if(d >= 2L){
+      scale_to <- df_data
+    } else 
+      if(d == 1L){
+        .den <- density(df_data[, 1L])
+        scale_to <- data.frame(x = quantile(df_data[, 1L], 
+                                            probs = c(.01, .99)),
+                               y = 1.8 * range(.den[[2L]]))
+      } else stop("scale_to missing from ggplot_tour() call.")
   }
   
   ## Assign hidden prepared dataframes

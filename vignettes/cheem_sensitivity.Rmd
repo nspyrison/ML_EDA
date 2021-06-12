@@ -49,6 +49,7 @@ if(F){
   file.edit("./apps/cheem/trees_of_cheem.r")
   file.edit("./apps/cheem/spinifex_ggproto.r")
 }
+
 ```
 
 # Data, palmerpenguins::penguins
@@ -74,14 +75,14 @@ detach("package:caret", unload = TRUE)
 encoded <- cbind(encoded[, 1:3], encoded[, 11:12], xdat)
 
 ## Additional setup not used in local attribution matrix
-new_obs_x <- rnorm_observation(dat)
+new_obs_x <- rnorm_observation(xdat)
 ```
 
-## EDA glimse
+## Check data space
 
 ```{r}
 bas_pca  <- basis_pca(xdat)
-bas_olda <- basis_olda(datx, clas1)
+bas_olda <- basis_olda(xdat, clas1)
 
 require("patchwork")
 view_frame(bas_pca, data = xdat, 
@@ -90,14 +91,6 @@ view_frame(bas_pca, data = xdat,
 view_frame(bas_olda, data = xdat, 
            aes_args = list(color = clas1, shape = clas2)) + 
   ggtitle("OLDA1:2")
-
-# bas_olda4 <- basis_olda(xdat, clas1, d = 4)
-# proj <- xdat %*% bas_olda4
-# colnames(proj) <- paste0("OLDA", 1:4)
-# GGally::ggpairs(as.data.frame(proj), 
-#                 mapping = aes(color = clas1),
-#                 #, shap = clas2), ## Artifacts when using both classes... 
-#                 lower = list(continuous = wrap("points", alpha = 0.3)))
 ```
 
 
@@ -115,40 +108,52 @@ shap_df <- treeshap_df(.rf, xdat)
 
 # Compare variable obs and SHAP obs
 
-Keep in mind this is testing for the first level of species.
+Keep in mind this is testing for the first level of species, Adelie.
 
 ## Scatterplot matrix
 
 ```{r}
-require("patchwork")
 str(xdat)
 str(shap_df)
 
 g1 <- GGally::ggpairs(as.data.frame(xdat), mapping = aes(color = clas1),
-                      lower = list(continuous = wrap("points", alpha = 0.3)))
+                      lower = list(continuous = wrap("points", alpha = 0.3))) +
+  ggtitle("Variable space")
 g2 <- GGally::ggpairs(as.data.frame(shap_df), mapping = aes(color = clas1),
-                      lower = list(continuous = wrap("points", alpha = 0.3)))
-g1 + g2
+                      lower = list(continuous = wrap("points", alpha = 0.3))) +
+  ggtitle("SHAP-Adelie space")
+g1 ## Can't patchwork a ggplotmatrix.
+g2
 ```
 
 
 ## NMDS
 
-Phrasing the question such as ~"explore the sensitivity of the SHAP values" reminds me of observational vacinity/distance, which reminds me of MDS, so let's look at NMDS with `MASS::isoMDS`
+Phrasing the question such as ~"explore the sensitivity of the SHAP values" reminds me of observational vicinity/distance, which reminds me of MDS, so let's look at NMDS with `MASS::isoMDS`
 
 ```{r}
-require("spinifex")
 require("MASS")
-require('ggfortify')
-
-dim(spinifex::PimaIndiansDiabetes_wide)
-dat <- spinifex::PimaIndiansDiabetes_wide
-
-nmds <- MASS::isoMDS(dist(dat)) ## see nmds$points especially
-plot(nmds$points, type = "n")
-text(nmds$points, labels = as.character(1:nrow(dat)))
-
-#plotly::ggplotly(gg)
+nmds_xdat <- MASS::isoMDS(dist(xdat))$points %>%
+  as.data.frame() ## see nmds$points especially
+nmds_shap <- MASS::isoMDS(dist(shap_df))$points %>%
+   as.data.frame() ## see nmds$points especially
+colnames(nmds_xdat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
+g3 <- nmds_xdat %>%
+  ggplot(aes(NMDS1, NMDS2, color = clas1, shap = clas2, rownum = 1:nrow(xdat))) +
+  geom_point() +
+  theme_minimal() +
+  theme(legend.position = "bottom", legend.direction = "horizontal") +
+  ggtitle("NMDS of variable space")
+g4 <- nmds_shap %>%
+  ggplot(aes(NMDS1, NMDS2, color = clas1, shap = clas2, rownum = 1:nrow(xdat))) +
+  geom_point() +
+  theme_minimal() +
+  theme(legend.position = "bottom", legend.direction = "horizontal") +
+  ggtitle("NMDS of SHAP-Adelie space")
+require("patchwork")
+g3 + g4
+# plotly::ggplotly(g3)
+# plotly::ggplotly(g4)
 ```
 
 
@@ -156,7 +161,30 @@ text(nmds$points, labels = as.character(1:nrow(dat)))
 
 
 ```{r}
+xdat_scaled <- spinifex::scale_sd(xdat)
+shap_scaled <- spinifex::scale_sd(shap_df)
 
 
+gt_path <- save_history(
+  xdat,
+  tour_path = grand_tour(),
+  max_bases = 10
+)
+
+ggt1 <- ggplot_tour(gt_path, xdat_scaled, angle = .1) +
+  ggproto_basis_axes() +
+  ggproto_data_background() +
+  ggproto_data_points(aes_args = list(color = clas1, shape = clas2),
+                      identity_args = list(size = 1.5, alpha = .7)) + 
+  ggtitle("Variable space, sd scaled")
+ggt2 <- ggplot_tour(gt_path, shap_scaled, angle = .1) +
+  ggproto_basis_axes() +
+  ggproto_data_background() +
+  ggproto_data_points(aes_args = list(color = clas1, shape = clas2),
+                      identity_args = list(size = 1.5, alpha = .7)) + 
+  ggtitle("NMDS of SHAP-Adelie space, sd scaled")
+
+animate_plotly(ggt1)
+animate_plotly(ggt2)
 ```
 
