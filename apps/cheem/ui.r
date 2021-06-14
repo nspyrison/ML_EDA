@@ -51,7 +51,8 @@ tab1_cheem <- tabPanel(title = "shap distance",
                ## Maha lookup
                h4("Mahalonobis lookup table"),
                DT::DTOutput("maha_lookup_DT", width = "100%") %>%
-                 shinycssloaders::withSpinner(type = 8L)
+                 shinycssloaders::withSpinner(type = 8L),
+               plotly::plotlyOutput("nmds_shap", width = "100%")
   ),
   ## mainPanel ----
   mainPanel(width = 9L,

@@ -41,6 +41,26 @@ server <- function(input, output, session){
   output$maha_lookup_DT <- DT::renderDT({maha_lookup_DT()})
   outputOptions(output, "maha_lookup_DT", suspendWhenHidden = FALSE) ## Eager evaluation
   
+  ###nmds_* dat, shap -----
+  nmds_dat <- reactive({
+    g <- ggplot(nmds_dat, aes(NMDS1, NMDS2, rownum = 1:nrow(dat))) +
+      geom_point() +
+      theme_minimal() +
+      theme(legend.position = "bottom", legend.direction)
+    plotly::ggplotly(g)
+  })
+  output$nmds_dat <- plotly::renderPlotly({nmds_dat()})
+  outputOptions(output, "nmds_dat", suspendWhenHidden = FALSE)
+  
+  nmds_shap <- reactive({
+    g <- ggplot(nmds_shap, aes(NMDS1, NMDS2, rownum = 1:nrow(dat))) +
+      geom_point() +
+      theme_minimal() +
+      theme(legend.position = "bottom", legend.direction)
+    plotly::ggplotly(g)
+  })
+  output$nmds_shap <- plotly::renderPlotly({nmds_shap()})
+  outputOptions(output, "nmds_shap", suspendWhenHidden = FALSE)
   
   ### tsne_plotly -----
   # output$tsne_plotly <- plotly::renderPlotly({

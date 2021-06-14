@@ -150,29 +150,35 @@ if(F)
 
 
 ## shap_dist_mat, shap_dist_quartile ------
-if(F){
-  tic("shap distance matrix")
-  shap_dist_mat <- as.matrix(dist(shap_df))
-  colnames(shap_dist_mat) <- NULL
-  rownames(shap_dist_mat) <- NULL
-  ## Init
-  quantiles <- data.frame(matrix(NA, ncol=5))
-  colnames(quantiles) <- paste0(seq(0, 100, 25), "pct")
-  shap_dist_quartile <- data.frame(matrix(NA, 5000, 5000))
-  sapply(1:ncol(shap_dist_mat), function(i){
-    vect <- shap_dist_mat[, i]
-    quantiles[i,] <<- quantile(vect, probs = seq(0, 1, .25))
-    shap_dist_quartile[, i] <<- dplyr::case_when(
-      vect >= quantiles[i, 1] & vect <= quantiles[i, 2] ~ 1L,
-      vect >= quantiles[i, 2] & vect <= quantiles[i, 3] ~ 2L,
-      vect >= quantiles[i, 3] & vect <= quantiles[i, 4] ~ 3L,
-      vect >= quantiles[i, 4] & vect <= quantiles[i, 5] ~ 4L)
-  })
-  hist(quantiles[,5])
-  toc() ## 1.46 Sec
-}
+tic("shap distance matrix, shap_dist_quartile")
+shap_dist_mat <- as.matrix(dist(shap_df))
+colnames(shap_dist_mat) <- NULL
+rownames(shap_dist_mat) <- NULL
+## Init
+quantiles <- data.frame(matrix(NA, ncol=5))
+colnames(quantiles) <- paste0(seq(0, 100, 25), "pct")
+shap_dist_quartile <- data.frame(matrix(NA, 5000, 5000))
+sapply(1L:ncol(shap_dist_mat), function(i){
+  vect <- shap_dist_mat[, i]
+  quantiles[i,] <<- quantile(vect, probs = seq(0, 1, .25))
+  shap_dist_quartile[, i] <<- dplyr::case_when(
+    vect >= quantiles[i, 1] & vect <= quantiles[i, 2] ~ 1L,
+    vect >= quantiles[i, 2] & vect <= quantiles[i, 3] ~ 2L,
+    vect >= quantiles[i, 3] & vect <= quantiles[i, 4] ~ 3L,
+    vect >= quantiles[i, 4] & vect <= quantiles[i, 5] ~ 4L)
+})
+hist(quantiles[,5])
+toc() ## 1.46 Sec
+
+## NMDS, nmds_dat, nmds_shap -----
+nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat))$points)
+nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points)
+colnames(nmds_xdat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
+
 
 ## EXPORT OBJECTS ----
+if(F)
+  load("apps/cheem/data/1preprocess.RData")
 if(F){
   save(dat,
        tgt_var,
@@ -181,8 +187,11 @@ if(F){
        shap_df,
        #shap_dist_mat,
        shap_dist_quartile,
+       nmds_dat, 
+       nmds_shap,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
+  
 }
 
