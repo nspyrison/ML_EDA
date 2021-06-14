@@ -97,13 +97,23 @@ view_frame(bas_olda, data = xdat,
 ## RF Model, shap df
 
 ```{r}
-rf_test <- as.integer(clas1 == levels(clas1)[1])
 .p <- ncol(xdat)
-.rf <- randomForest::randomForest(rf_test~.,
-                                  data = data.frame(rf_test, xdat),
-                                  mtry = if(is.discrete(clas1)) sqrt(.p) else .p / 3L)
-
-shap_df <- treeshap_df(.rf, xdat)
+.lvls <- levels(as.factor(clas1))
+shap_df <- data.frame(matrix(NA, ncol = .p, nrow = nrow(xdat))) ## Init
+#.mute <- sapply(1L:length(.lvls), function(i){
+for(i in 1L:length(.lvls)){
+  .bool_test <- clas1 == .lvls[1]
+  .int_test <- as.integer(.bool_test)
+  ## RF on full xdat
+  .rf <- randomForest::randomForest(.int_test~.,
+                                    data = data.frame(.int_test, xdat),
+                                    mtry = if(is.discrete(clas1)) sqrt(.p) else .p / 3L)
+  ## treeshap_df of only i-th class level obs.
+  .in_class_obs <- xdat[.bool_test, ]
+  .ret <- treeshap_df(.rf, .in_class_obs)
+  shap_df[.bool_test, ] <- as.data.frame(.ret) ## must cast as data.frame.
+}
+#})
 ```
 
 # Compare variable obs and SHAP obs
