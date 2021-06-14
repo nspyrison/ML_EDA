@@ -173,12 +173,13 @@ toc() ## 1.46 Sec
 ## NMDS, nmds_dat, nmds_shap -----
 nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat))$points)
 nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points)
-colnames(nmds_xdat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
+colnames(nmds_dat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
+
 
 
 ## EXPORT OBJECTS ----
 if(F)
-  load("apps/cheem/data/1preprocess.RData")
+  load("./apps/cheem/data/1preprocess.RData")
 if(F){
   save(dat,
        tgt_var,

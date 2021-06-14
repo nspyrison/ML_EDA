@@ -12,55 +12,70 @@ server <- function(input, output, session){
   
   
   ### dat_w_shap_dist -----
-  shap_dist_fct <- reactive({
+  shap_dist_quart <- reactive({
     as.factor(shap_dist_quartile[, input$lookup_rownum])
   })
   
   ### shap_ggpairs -----
   shap_ggpairs <- reactive({
-    GGally::ggpairs(as.data.frame(shap_df[, 1:input$plot_cols]),
-                    mapping = aes(color = shap_dist_fct()),
-                    lower = list(continuous = wrap("points", alpha = 0.3))) +
-      ggtitle(paste0("SHAP space, colored by SHAP distance from obs# ", input$lookup_rownum))
+    g <- GGally::ggpairs(as.data.frame(shap_df[, 1:input$plot_cols]),
+                         mapping = aes(color = shap_dist_quart()),
+                         lower = list(continuous = wrap("points", alpha = 0.3))) +
+      ggtitle(paste0("SHAP space, colored by SHAP distance from obs# ", input$lookup_rownum)
+      )
+    plotly::ggplotly(g) %>%
+      config(displayModeBar = FALSE)
   })
-  output$shap_ggpairs <- renderPlot({shap_ggpairs()})
+  output$shap_ggpairs <- plotly::renderPlotly({shap_ggpairs()})
   
   ### var_ggpairs -----
   var_ggpairs <- reactive({
-    GGally::ggpairs(as.data.frame(dat[, 1:input$plot_cols]),
-                    mapping = aes(color = shap_dist_fct()),
-                    lower = list(continuous = wrap("points", alpha = 0.3))) +
-      ggtitle(paste0("Variable space, colored by SHAP distance from obs# ", input$lookup_rownum))
+    g <- GGally::ggpairs(as.data.frame(dat[, 1:input$plot_cols]),
+                         mapping = aes(color = shap_dist_quart()),
+                         lower = list(continuous = wrap("points", alpha = 0.3))) +
+      ggtitle(paste0("Variable space, colored by SHAP distance from obs# ", input$lookup_rownum)
+      )
+    plotly::ggplotly(g) %>%
+      plotly::config(displayModeBar = FALSE)
   })
-  output$var_ggpairs <- renderPlot({var_ggpairs()})
+  output$var_ggpairs <- plotly::renderPlotly({var_ggpairs()})
   
   ### maha_lookup_DT -----
   maha_lookup_DT <- reactive({
-    return(DT::datatable(maha_lookup_df[, 1L:3L], rownames = FALSE))
+    return(DT::datatable(
+      maha_lookup_df[, 1L:3L], rownames = FALSE, 
+      options = list(pageLength = 5)
+    ))
   })
   output$maha_lookup_DT <- DT::renderDT({maha_lookup_DT()})
   outputOptions(output, "maha_lookup_DT", suspendWhenHidden = FALSE) ## Eager evaluation
   
   ###nmds_* dat, shap -----
-  nmds_dat <- reactive({
-    g <- ggplot(nmds_dat, aes(NMDS1, NMDS2, rownum = 1:nrow(dat))) +
+  nmds_shap_plot <- reactive({
+    g <- ggplot(nmds_shap, 
+                aes(NMDS1, NMDS2, id = id,
+                    color = shap_dist_quart(), shape = shap_dist_quart())) +
       geom_point() +
       theme_minimal() +
-      theme(legend.position = "bottom", legend.direction)
-    plotly::ggplotly(g)
+      theme(legend.position = "bottom", legend.direction = "horizontal")
+    plotly::ggplotly(g) %>%
+      plotly::config(displayModeBar = FALSE)
   })
-  output$nmds_dat <- plotly::renderPlotly({nmds_dat()})
-  outputOptions(output, "nmds_dat", suspendWhenHidden = FALSE)
+  output$nmds_shap_plot <- plotly::renderPlotly({nmds_shap_plot()})
+  outputOptions(output, "nmds_shap_plot", suspendWhenHidden = FALSE)
   
-  nmds_shap <- reactive({
-    g <- ggplot(nmds_shap, aes(NMDS1, NMDS2, rownum = 1:nrow(dat))) +
+  nmds_dat_plot <- reactive({
+    g <- ggplot(nmds_dat, 
+                aes(NMDS1, NMDS2, id = id,
+                    color = shap_dist_quart(), shape = shap_dist_quart())) +
       geom_point() +
       theme_minimal() +
-      theme(legend.position = "bottom", legend.direction)
-    plotly::ggplotly(g)
+      theme(legend.position = "bottom", legend.direction = "horizontal")
+    plotly::ggplotly(g) %>%
+      plotly::config(displayModeBar = FALSE)
   })
-  output$nmds_shap <- plotly::renderPlotly({nmds_shap()})
-  outputOptions(output, "nmds_shap", suspendWhenHidden = FALSE)
+  output$nmds_dat_plot <- plotly::renderPlotly({nmds_dat_plot()})
+  outputOptions(output, "nmds_dat_plot", suspendWhenHidden = FALSE)
   
   ### tsne_plotly -----
   # output$tsne_plotly <- plotly::renderPlotly({
