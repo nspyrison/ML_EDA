@@ -20,9 +20,9 @@ server <- function(input, output, session){
   shap_ggpairs <- reactive({
     g <- GGally::ggpairs(as.data.frame(shap_df[, 1:input$plot_cols]),
                          mapping = aes(color = shap_dist_quart()),
-                         lower = list(continuous = wrap("points", alpha = 0.3))) +
-      ggtitle(paste0("SHAP space, colored by SHAP distance from obs# ", input$lookup_rownum)
-      )
+                         lower = list(continuous = wrap("points", alpha = 0.3)))# +
+      # ggtitle("SHAP matrix",
+      #         paste0("colored by SHAP distance from obs# ", input$lookup_rownum))
     plotly::ggplotly(g) %>%
       config(displayModeBar = FALSE)
   })
@@ -30,11 +30,11 @@ server <- function(input, output, session){
   
   ### var_ggpairs -----
   var_ggpairs <- reactive({
-    g <- GGally::ggpairs(as.data.frame(dat[, 1:input$plot_cols]),
+    g <- GGally::ggpairs(as.data.frame(dat[, 1L:input$plot_cols]),
                          mapping = aes(color = shap_dist_quart()),
-                         lower = list(continuous = wrap("points", alpha = 0.3))) +
-      ggtitle(paste0("Variable space, colored by SHAP distance from obs# ", input$lookup_rownum)
-      )
+                         lower = list(continuous = wrap("points", alpha = 0.3)))# +
+      # ggtitle("Data matrix",
+      #         paste0("colored by SHAP distance from obs# ", input$lookup_rownum))
     plotly::ggplotly(g) %>%
       plotly::config(displayModeBar = FALSE)
   })
@@ -43,8 +43,8 @@ server <- function(input, output, session){
   ### maha_lookup_DT -----
   maha_lookup_DT <- reactive({
     return(DT::datatable(
-      maha_lookup_df[, 1L:3L], rownames = FALSE, 
-      options = list(pageLength = 5)
+      maha_lookup_df[, 1L:3L], rownames = FALSE,
+      options = list(pageLength = 5L)
     ))
   })
   output$maha_lookup_DT <- DT::renderDT({maha_lookup_DT()})
@@ -52,7 +52,7 @@ server <- function(input, output, session){
   
   ###nmds_* dat, shap -----
   nmds_shap_plot <- reactive({
-    g <- ggplot(nmds_shap, 
+    g <- ggplot(nmds_shap,
                 aes(NMDS1, NMDS2, id = id,
                     color = shap_dist_quart(), shape = shap_dist_quart())) +
       geom_point() +
@@ -65,7 +65,7 @@ server <- function(input, output, session){
   outputOptions(output, "nmds_shap_plot", suspendWhenHidden = FALSE)
   
   nmds_dat_plot <- reactive({
-    g <- ggplot(nmds_dat, 
+    g <- ggplot(nmds_dat,
                 aes(NMDS1, NMDS2, id = id,
                     color = shap_dist_quart(), shape = shap_dist_quart())) +
       geom_point() +

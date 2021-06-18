@@ -51,8 +51,7 @@ require("DT") ## For html table and buttons
 
 
 ##### tab1_cheem ----
-tab1_cheem <- tabPanel(title = "shap distance",
-                       fluidPage(
+tab1_cheem <- tabPanel(title = "SHAP matrix distances", fluidPage(
   ## Top input row ----
   fluidRow(
     column(width = 4L,
@@ -63,19 +62,18 @@ tab1_cheem <- tabPanel(title = "shap distance",
     ),
     column(width = 8L,
            p("- Fifa 2020 data aggregated into 9 numeric variables."),
-           p("1) Extract the SHAP values for EACH observation (in-sample, obs of a random forest model, shap by {treeshap})."),
-           p("2) Create a distance matrix from the SHAP values."),
+           p("1) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, shap by {treeshap})."),
+           p("2) Create a distance matrix from the SHAP matrix."),
            p("3) For color; find the quartiles levels of the distance matrix. 1 = closest 1/4 obs, ... 4 = furthest away 1/4 obs.",),
            p("4) Create NMDS for variable and shap spaces."),
            p("- Load above objects into shiny app; wait time is shiny/ggplot2/GGally/plotly."),
-           h4("Colored by SHAP distance from this player:"),
+           h4("Colored by SHAP matrix distance from this player:"),
            fluidRow(
              column(6L, numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L)),
-             column(6L, numericInput("plot_cols", "For first X columns [1, 8]", 3L, 1L, 8L),
+             column(6L, numericInput("plot_cols", "For first ? columns [1, 8]", 3L, 1L, 8L),
                     p("Render time (before NMDS): ~4 sec w/ 3 columns, ~33 sec w/ 8 columns."),
                     p("Render time (after NMDS): ~9-10 sec w/ 3 columns, ~2 min w/ 8 columns.")
              ))
-           )
     )
   ),
   ## main output row ----
@@ -83,24 +81,24 @@ tab1_cheem <- tabPanel(title = "shap distance",
     shiny::hr(),
     ## Left column, NMDS
     column(width = 4L,
-           h4("NMDS on SHAP values"),
+           h4("NMDS of SHAP matrix"),
            plotly::plotlyOutput("nmds_shap_plot", width = "100%") %>%
              shinycssloaders::withSpinner(type = 8L),
-           h4("NMDS on variable values"),
+           h4("NMDS on data matrix"),
            plotly::plotlyOutput("nmds_dat_plot", width = "100%") %>%
              shinycssloaders::withSpinner(type = 8L)
     ),
     ## Right column, ggpairs
     column(width = 8L,
-           h4("Scatterplot pairs of SHAP space"),
+           h4("Scatterplot pairs of SHAP matrix"),
            plotly::plotlyOutput("shap_ggpairs", width = "100%") %>%
              shinycssloaders::withSpinner(type = 8L),
-           h4("Scatterplot pairs of variable space"),
+           h4("Scatterplot pairs of data matrix"),
            plotly::plotlyOutput("var_ggpairs", width = "100%") %>%
              shinycssloaders::withSpinner(type = 8L)
     )
-  ),
-  
+  )
+
 )) ## Assign tab1_cheem
 
 
@@ -128,7 +126,7 @@ tab2_about <- tabPanel("About", fluidPage(
 )) ## Assign tab4_about
 
 ###### Combined ui object ----
-ui <- fluidPage(theme = shinythemes::shinytheme("flatly"), 
+ui <- fluidPage(theme = shinythemes::shinytheme("flatly"),
                 ## Content:
                 navbarPage("Cheem",
                            tab1_cheem,
