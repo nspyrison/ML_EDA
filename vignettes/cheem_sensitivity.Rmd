@@ -63,7 +63,7 @@ raw_rmna <- raw[!is.na(raw$sex),]
 xdat <- spinifex::scale_sd(raw_rmna[, 3:6])
 clas1 <- raw_rmna$species
 clas2 <- raw_rmna$sex
-table(clas1) ## Unbalenced island obs
+table(clas1) ## Unbalanced island obs
 table(clas2) ## Balanced sex
 
 ## Encode classes {caret}
@@ -148,8 +148,10 @@ nmds_xdat <- MASS::isoMDS(dist(xdat))$points %>%
 nmds_shap <- MASS::isoMDS(dist(shap_df))$points %>%
    as.data.frame() ## see nmds$points especially
 colnames(nmds_xdat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
+nmds_xdat$rownum <- 1:nrow(xdat)
+nmds_shap$rownum <- 1:nrow(xdat)
 g3 <- nmds_xdat %>%
-  ggplot(aes(NMDS1, NMDS2, color = clas1, shap = clas2, rownum = 1:nrow(xdat))) +
+  ggplot(aes(NMDS1, NMDS2, color = clas1, shap = clas2, rownum = rownum)) +
   geom_point() +
   theme_minimal() +
   theme(legend.position = "bottom", legend.direction = "horizontal") +
@@ -160,10 +162,10 @@ g4 <- nmds_shap %>%
   theme_minimal() +
   theme(legend.position = "bottom", legend.direction = "horizontal") +
   ggtitle("NMDS of SHAP-Adelie space")
-require("patchwork")
-g3 + g4
-# plotly::ggplotly(g3)
-# plotly::ggplotly(g4)
+# require("patchwork")
+# g3 + g4
+plotly::ggplotly(g3)
+plotly::ggplotly(g4)
 ```
 
 
