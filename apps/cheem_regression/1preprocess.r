@@ -3,11 +3,8 @@ if(F){
   dat
   tgt_var
   maha_lookup_df
-  #expl
   treeshap_df
-  #shap_dist_mat
   shap_dist_quartile
-  ## Created from analysis in:
   file.edit("./vignettes/cheem_fifa.rmd")
   file.edit("./vignettes/cheem_varieties.rmd")
 }
@@ -179,7 +176,7 @@ colnames(nmds_dat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
 
 ## EXPORT OBJECTS ----
 if(F)
-  load("./apps/cheem/data/1preprocess.RData")
+  load("./apps/cheem_regression/data/1preprocess.RData")
 if(F){
   save(dat,
        tgt_var,
@@ -191,8 +188,7 @@ if(F){
        nmds_dat, 
        nmds_shap,
        file = "1preprocess.RData")
-  file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
+  file.copy("./1preprocess.RData", to = "./apps/cheem_regression/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
-  
 }
 

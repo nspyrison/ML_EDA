@@ -3,102 +3,73 @@
 #' June 2021
 
 #### Dependencies -----
-## Primary work packages
-require("DALEX")
-require("spinifex")
-require("tourr")
-require("ggplot2")
 ## EDA and utility
-require("GGally")
-require("tictoc")
-require("patchwork")
+require("ggplot2")
 require("plotly")
 require("magrittr")
-## Local functions
-source("trees_of_cheem.r")   ## Cheem functions
-source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
-## Load objs
-load("./data/1preprocess.RData")
-## Loads the following objects: 
-## dat, tgt_var, maha_lookup_df, shap_df, shap_dist_mat, nmds_dat, nmds_shap,
-.n <- nrow(dat)
-nmds_dat$id  <- 1L:.n
-nmds_shap$id <- 1L:.n
-
-if(F)
-  load("./apps/cheem/data/1preprocess.RData")
-
-
-if(F){ ## Not run, source/open local function files relative to proj
-  source("./apps/cheem/trees_of_cheem.r")
-  source("./apps/cheem/spinifex_ggproto.r")
-  
-  file.edit("./apps/cheem/trees_of_cheem.r")
-  file.edit("./apps/cheem/spinifex_ggproto.r")
-  file.edit("./apps/cheem/1preprocess.r")
-}
 ## Shiny specific
-require("tidyr") ## Needed for pivoting, exports `%>%`
 require("shiny")
 require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 require("DT") ## For html table and buttons
+## Load objs
+load("./data/1preprocess.RData")
+## Loads the following objects: 
+# dat, clas1, clas2, shap_df, dist_dat, dist_shap, bound_spaces_df,
+## Initialize
+.nn <- nrow(bound_spaces_df)
+species <- rep_len(clas1, .nn)
+sex <- rep_len(clas2, .nn)
 
-## Load & initialize ----
+hk <- bound_spaces_df %>%
+  highlight_key(~rownum)
+g <- ggplot(hk, aes(V1, V2, rownum = rownum,
+                    color = species, shape = sex)) +
+  geom_point() +
+  facet_grid(rows = vars(data), cols = vars(space)) +
+  theme_bw() +
+  theme(axis.text  = element_blank(),
+        axis.ticks = element_blank()) +
+  scale_color_discrete(name = "") + ## Manual legend title
+  scale_shape_discrete(name = "") ## Manual legend title
 
-#palette(RColorBrewer::brewer.pal(8L, "Dark2"))
 
-
+if(F){ ## Not run, source/open local function files relative to proj
+  source("./apps/cheem_classification/trees_of_cheem.r")
+  source("./apps/cheem_classification/spinifex_ggproto.r")
+  load("./apps/cheem_classification/data/1preprocess.RData")
+  ##
+  file.edit("./apps/cheem_classification/trees_of_cheem.r")
+  file.edit("./apps/cheem_classification/spinifex_ggproto.r")
+  file.edit("./apps/cheem_classification/1preprocess.r")
+}
 
 ##### tab1_cheem ----
-tab1_cheem <- tabPanel(title = "SHAP matrix distances", fluidPage(
+tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", fluidPage(
   ## Top input row ----
   fluidRow(
     column(width = 4L,
-           ## Maha lookup
-           h4("Mahalonobis lookup table"),
-           DT::DTOutput("maha_lookup_DT", width = "100%") %>%
-             shinycssloaders::withSpinner(type = 8L)
+           p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
+           p("1) For each species (level of class 1), create a RF model predicting that species."),
+           p("2) For each species model, extract SHAP values of EACH observation, bind for a full [n*p] set."),
+           p("3) Create nMDS-, PCA-, and oLDA- spaces for the orginal and shap values, format together"),
+           p("- Load above objects into shiny app; wait time is shiny/ggplot2/GGally/plotly."),
     ),
     column(width = 8L,
-           p("- Fifa 2020 data aggregated into 9 numeric variables."),
-           p("1) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, shap by {treeshap})."),
-           p("2) Create a distance matrix from the SHAP matrix."),
-           p("3) For color; find the quartiles levels of the distance matrix. 1 = closest 1/4 obs, ... 4 = furthest away 1/4 obs.",),
-           p("4) Create NMDS for variable and shap spaces."),
-           p("- Load above objects into shiny app; wait time is shiny/ggplot2/GGally/plotly."),
-           h4("Colored by SHAP matrix distance from this player:"),
-           fluidRow(
-             column(6L, numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L)),
-             column(6L, numericInput("plot_cols", "For first ? columns [1, 8]", 3L, 1L, 8L),
-                    p("Render time (before NMDS): ~4 sec w/ 3 columns, ~33 sec w/ 8 columns."),
-                    p("Render time (after NMDS): ~9-10 sec w/ 3 columns, ~2 min w/ 8 columns.")
-             ))
+     
     )
   ),
   ## main output row ----
   fluidRow(
     shiny::hr(),
-    ## Left column, NMDS
-    column(width = 4L,
-           h4("NMDS of SHAP matrix"),
-           plotly::plotlyOutput("nmds_shap_plot", width = "100%") %>%
-             shinycssloaders::withSpinner(type = 8L),
-           h4("NMDS on data matrix"),
-           plotly::plotlyOutput("nmds_dat_plot", width = "100%") %>%
-             shinycssloaders::withSpinner(type = 8L)
-    ),
-    ## Right column, ggpairs
-    column(width = 8L,
-           h4("Scatterplot pairs of SHAP matrix"),
-           plotly::plotlyOutput("shap_ggpairs", width = "100%") %>%
-             shinycssloaders::withSpinner(type = 8L),
-           h4("Scatterplot pairs of data matrix"),
-           plotly::plotlyOutput("var_ggpairs", width = "100%") %>%
-             shinycssloaders::withSpinner(type = 8L)
-    )
+    h3("Palmer penguins, Color by species, shape by sex"),
+    plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
+      shinycssloaders::withSpinner(type = 8L),
+    shiny::hr(),
+    h4("Selected data:"),
+    verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
+    DT::DTOutput("selected_df")
   )
-
 )) ## Assign tab1_cheem
 
 

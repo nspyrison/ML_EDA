@@ -29,7 +29,7 @@ server <- function(input, output, session) {
   output$plot <- renderPlotly({ ## master plot
     ggplotly(g) %>%
       layout(dragmode = "select") %>%
-      event_register("plotly_selecting")
+      event_register("plotly_selected")
   })
   
   selected_df <- reactive({ ## data within selection

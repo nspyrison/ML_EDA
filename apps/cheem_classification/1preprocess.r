@@ -1,13 +1,4 @@
-## Creates objs for use in shiny app:
-if(F){
-  dat
-  tgt_var
-  maha_lookup_df
-  #expl
-  treeshap_df
-  #shap_dist_mat
-  shap_dist_quartile
-}
+## Creates objs for use in shiny app
 
 ## Dependencies ------
 require("DALEX")
@@ -19,6 +10,7 @@ require("dplyr")
 ##
 require("palmerpenguins") ## data
 require("caret") ## One hot encoding class.
+require("plotly") ## Linked brushing
 ## Local files
 source("./apps/cheem/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
 source("./apps/cheem/spinifex_ggproto.r") ## New spinifex ggproto_* api
@@ -38,7 +30,8 @@ raw_rmna <- raw[!is.na(raw$sex),]
 lvls <- levels(raw_rmna$species)
 ## Filter to closest 2 classes
 raw_rmna <- raw_rmna[raw_rmna$species %in% lvls[1:2], ]
-xdat <- spinifex::scale_sd(raw_rmna[, 3:6])
+## Normalize each column by its standard deviations
+dat <- spinifex::scale_sd(raw_rmna[, 3:6]) %>% as.data.frame()
 clas1 <- factor(raw_rmna$species, levels = lvls[1:2]) ## manually remove 3rd lvl
 clas2 <- raw_rmna$sex
 if(F){
@@ -46,98 +39,148 @@ if(F){
   table(clas2) ## Balanced sex
 }
 
-
 # ## Additional setup not used in local attribution matrix
 # new_obs_x <- rnorm_observation(xdat)
 
-## Encode classes {caret}
-require("caret")
-dv <- caret::dummyVars(" ~ .", data = raw_rmna)
-encoding <- data.frame(predict(dv, raw_rmna))
-detach("package:caret", unload = TRUE)
-encoding <- encoding[, c(-7:-10, -13)]
-str(encoding)
-
-## Normalize each column by its standard deviations
-dat <- spinifex::scale_sd(xdat) %>%
-  as.data.frame()
+# ## Encode classes {caret}
+# require("caret")
+# dv <- caret::dummyVars(" ~ .", data = raw_rmna)
+# encoding <- data.frame(predict(dv, raw_rmna))
+# detach("package:caret", unload = TRUE)
+# encoding <- encoding[, c(-7:-10, -13)]
+# str(encoding)
 
 ## Random forest model {randomForest} -----
 .p <- ncol(dat)
 .rf_mtry <- if(is.discrete(clas1)) sqrt(.p) else .p / 3L
-system.time(
-  .rf <- randomForest::randomForest(clas1~.,
-                                    data = data.frame(clas1, dat),
-                                    mtry = .rf_mtry)
-)
-
-## Explainer {DALEX} -----
-# system.time(
-# expl <- DALEX::explain(model = .rf,
-#                        data = dat,
-#                        y = tgt_var,
-#                        label = "SHAP-ley values of random forest")
-# )
-
-## shap_df {treeshap} ------
-##TODO: ERROR here with mbm1
-# Error in treeshap::randomForest.unify(.rf, data) : 
-#   Models built on data with categorical features are not supported - please encode them before training.
-
-tic("treeshap")
-gc();Sys.time()
-(mbm1 <- microbenchmark::microbenchmark(
-  treeshap = shap_df1 <- treeshap_df(.rf, dat),
-  times = 1L))
-beepr::beep(4)
+.lvls <- levels(clas1)
+tic("RF fit")
+for(i in 1:length(.lvls)){
+  test_i <- as.integer(clas1 == .lvls[i]) ## treeshap needs integer RF, not bool.
+  assign(x = paste0(".rf", i),
+         randomForest::randomForest(test_i~.,
+                                    data = data.frame(test_i, dat),
+                                    mtry = .rf_mtry),
+         envir = globalenv()
+  )
+}
 toc()
 
-####### TODO: below is unedited from fifa ===
-################################################
-## shap_dist_mat, shap_dist_quartile ------
+
+## shap_df {treeshap} ------
+gc()
+tic("treeshap")
+for(i in 1:length(.lvls)){
+  .sub <- dat[clas1 == .lvls[i],]
+  .rf <- get(paste0('.rf', i))
+  assign(paste0("treeshap", i),
+         treeshap_df(.rf, .sub),
+         envir = globalenv())
+}
+shap_df <- rbind(treeshap1, treeshap2)
+attr(shap_df, "data") <- dat
+toc()
+
+## Create spaces! ------
+### Distance matrix
 tic("shap distance matrix, shap_dist_quartile")
-shap_dist_mat <- as.matrix(dist(shap_df))
-colnames(shap_dist_mat) <- NULL
-rownames(shap_dist_mat) <- NULL
-## Init
-quantiles <- data.frame(matrix(NA, ncol=5))
-colnames(quantiles) <- paste0(seq(0, 100, 25), "pct")
-shap_dist_quartile <- data.frame(matrix(NA, 5000, 5000))
-sapply(1L:ncol(shap_dist_mat), function(i){
-  vect <- shap_dist_mat[, i]
-  quantiles[i,] <<- quantile(vect, probs = seq(0, 1, .25))
-  shap_dist_quartile[, i] <<- dplyr::case_when(
-    vect >= quantiles[i, 1] & vect <= quantiles[i, 2] ~ 1L,
-    vect >= quantiles[i, 2] & vect <= quantiles[i, 3] ~ 2L,
-    vect >= quantiles[i, 3] & vect <= quantiles[i, 4] ~ 3L,
-    vect >= quantiles[i, 4] & vect <= quantiles[i, 5] ~ 4L)
-})
-hist(quantiles[,5])
+dist_dat <- as.matrix(dist(shap_df))
+dist_shap  <- as.matrix(dist(shap_df))
+colnames(dat_dist) <- colnames(shap_dist) <- NULL
+rownames(dat_dist) <- rownames(shap_dist) <- NULL
 toc() ## 1.46 Sec
 
-## NMDS, nmds_dat, nmds_shap -----
-nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat))$points)
-nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points)
-colnames(nmds_dat) <- colnames(nmds_shap) <- paste0("NMDS", 1:2)
+### nMDS
+.n <- nrow(dat)
+nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat))$points) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "nMDS")
+nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "nMDS")
 
+### PCA
+pca_dat  <- as.matrix(dat) %*% spinifex::basis_pca(dat) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA")
+pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA")
 
+### oLDA
+olda_dat  <- as.matrix(dat) %*% spinifex::basis_olda(dat, clas1) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "oLD")
+olda_shap <- as.matrix(shap_df) %*% spinifex::basis_olda(shap_df, clas1) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "oLD")
+
+### Combine
+names(nmds_dat) <- names(nmds_shap) <- names(pca_dat) <- names(pca_shap) <-
+  names(olda_dat) <- names(olda_shap) <- c(paste0("V", 1:2), "rownum", "data", "space")
+bound_spaces_df <- rbind(nmds_dat, nmds_shap, pca_dat, pca_shap, olda_dat, olda_shap)
+beepr::beep(4)
 
 ## EXPORT OBJECTS ----
-if(F)
-  load("./apps/cheem/data/1preprocess.RData")
 if(F){
-  save(dat,
-       tgt_var,
-       maha_lookup_df,
-       # expl,
-       shap_df,
-       #shap_dist_mat,
-       shap_dist_quartile,
-       nmds_dat, 
-       nmds_shap,
+  save(raw_rmna,
+       # dat,
+       clas1, clas2,
+       # shap_df,
+       # dist_dat,
+       # dist_shap,
+       bound_spaces_df,
        file = "1preprocess.RData")
-  file.copy("./1preprocess.RData", to = "./apps/cheem/data/1preprocess.RData", overwrite = TRUE)
+  file.copy("./1preprocess.RData", to = "./apps/cheem_classification/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
+}
+if(F)
+  load("./apps/cheem_classification/data/1preprocess.RData")
+
+## Call in app or local with:
+## Click select
+if(F){
+  ## Mock-up visual ------
+  require("ggplot2")
+  tic("prep ggplot ")
+  str(bound_spaces_df)
+  .nn <- nrow(bound_spaces_df)
+  species <- rep_len(clas1, .nn)
+  sex <- rep_len(clas2, .nn)
   
+  hk <- bound_spaces_df %>%
+    highlight_key(~rownum)
+  g <- ggplot(hk, aes(V1, V2, rownum = rownum,
+                      color = species, shape = sex)) +
+    geom_point() +
+    facet_grid(rows = vars(data), cols = vars(space)) +
+    theme_bw() +
+    theme(axis.text  = element_blank(),
+          axis.ticks = element_blank()) +
+    scale_color_discrete(name = "") + ## Manual legend title
+    scale_shape_discrete(name = "") ## Manual legend title
+  
+  ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+    config(displayModeBar = FALSE) %>% ## Remove html buttons
+    layout(dragmode = FALSE) %>% ## Set drag left mouse to section box from zoom window
+    event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+    highlight(on = 'plotly_click', off = "plotly_doubleclick",
+              persistent = TRUE) ## Allow selection of many points?
 }
 
+## Other Selection options
+if(F){
+  ## BOX SELECT
+  ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+    config(displayModeBar = FALSE) %>% ## Remove html buttons
+    layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
+    event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+    highlight(on = "plotly_selected", off = "plotly_deselect")
+  ## CLICK SELECT
+  ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+    config(displayModeBar = FALSE) %>% ## Remove html buttons
+    layout(dragmode = FALSE) %>% ## Set drag left mouse to section box from zoom window
+    event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+    highlight(on = 'plotly_click', off = "plotly_doubleclick",
+              persistent = TRUE) ## Allow selection of many points?
+  ## LASSO SELECT
+  ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+    config(displayModeBar = FALSE) %>% ## Remove html buttons
+    layout(dragmode = "lasso") %>% ## Set drag left mouse to section box from zoom window
+    event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+    highlight(on = 'plotly_selected', off = "plotly_deselect")
+}

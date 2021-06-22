@@ -26,16 +26,16 @@ nmds_dat$id  <- 1L:.n
 nmds_shap$id <- 1L:.n
 
 if(F)
-  load("./apps/cheem/data/1preprocess.RData")
+  load("./apps/cheem_regression/data/1preprocess.RData")
 
 
 if(F){ ## Not run, source/open local function files relative to proj
-  source("./apps/cheem/trees_of_cheem.r")
-  source("./apps/cheem/spinifex_ggproto.r")
+  source("./apps/cheem_regression/trees_of_cheem.r")
+  source("./apps/cheem_regression/spinifex_ggproto.r")
   
-  file.edit("./apps/cheem/trees_of_cheem.r")
-  file.edit("./apps/cheem/spinifex_ggproto.r")
-  file.edit("./apps/cheem/1preprocess.r")
+  file.edit("./apps/cheem_regression/trees_of_cheem.r")
+  file.edit("./apps/cheem_regression/spinifex_ggproto.r")
+  file.edit("./apps/cheem_regression/1preprocess.r")
 }
 ## Shiny specific
 require("tidyr") ## Needed for pivoting, exports `%>%`
