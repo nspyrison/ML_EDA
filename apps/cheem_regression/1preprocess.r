@@ -58,7 +58,7 @@ dat <- .scaled %>% dplyr::mutate(
   ## Movement
   mvm = (movement_sprint_speed+movement_balance+movement_acceleration+
            mentality_vision+mentality_composure+movement_agility+
-           mentality_penalties+skill_fk_accuracy+power_stamina + movement_reactions)/9,
+           mentality_penalties+skill_fk_accuracy+power_stamina+movement_reactions)/10,
   ## Power
   pwr = (power_strength+power_jumping)/2,
   ## Goalkeeping
@@ -157,6 +157,7 @@ if(F)
 ## Create spaces! ------
 ### nMDS
 .n <- nrow(dat_fld)
+.nms <- rownames(dat_fld)
 tic("nMDS");Sys.time()
 nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat_fld))$points) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "nMDS")
@@ -174,26 +175,28 @@ pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA")
 toc()
 
-# ### oLDA
-# olda_dat  <- as.matrix(dat_fld) %*% spinifex::basis_olda(dat_fld, clas1) %>%
-#   scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "oLD")
-# olda_shap <- as.matrix(shap_df) %*% spinifex::basis_olda(shap_df, clas1) %>%
-#   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "oLD")
 
 ### Combine
 names(nmds_dat) <- names(nmds_shap) <- names(pca_dat) <- names(pca_shap) <-
   c(paste0("V", 1:2), "rownum", "data", "space")
 bound_spaces_df <- rbind(nmds_dat, nmds_shap, pca_dat, pca_shap)
+.nms <- rep_len(rownames(dat_fld), nrow(bound_spaces_df))
+bound_spaces_df <- bound_spaces_df %>% 
+  mutate(info = paste0("row: ", rownum, ", ", .nms))
 beepr::beep(4)
 
-
+## combine X, Y and decode info for disp.
+dat <- data.frame(1:nrow(dat_fld), 
+                  paste0("row: ", 1:nrow(dat_fld), ",", rownames(dat_fld)), 
+                  maha_lookup_df$maha_dist,
+                  tgt_var, 
+                  dat_fld)
+colnames(dat) <- c("rownum", "info", "maha_dist", "wage_eruo", colnames(dat_fld))
 ## EXPORT OBJECTS ----
 if(F){
-  dat$wage <- tgt_var
   save(dat,
        tgt_var,
        maha_lookup_df,
-       shap_df,
        bound_spaces_df,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem_regression/data/1preprocess.RData", overwrite = TRUE)
