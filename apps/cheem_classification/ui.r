@@ -62,7 +62,8 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
   ## main output row ----
   fluidRow(
     shiny::hr(),
-    h3("Palmer penguins, Color by species, shape by sex"),
+    h3("Palmer penguins, color by species, shape by sex"),
+    p("Drag to select points, double click to remove the selection."),
     plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
       shinycssloaders::withSpinner(type = 8L),
     shiny::hr(),

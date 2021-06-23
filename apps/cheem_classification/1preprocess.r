@@ -131,10 +131,11 @@ if(F){
 if(F)
   load("./apps/cheem_classification/data/1preprocess.RData")
 
-## Call in app or local with:
-## Click select
+
 if(F){
   ## Mock-up visual ------
+  ## Call in app or local with:
+  ## Click select
   require("ggplot2")
   tic("prep ggplot ")
   str(bound_spaces_df)
@@ -154,12 +155,12 @@ if(F){
     scale_color_discrete(name = "") + ## Manual legend title
     scale_shape_discrete(name = "") ## Manual legend title
   
+  ## BOX SELECT
   ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
     config(displayModeBar = FALSE) %>% ## Remove html buttons
-    layout(dragmode = FALSE) %>% ## Set drag left mouse to section box from zoom window
+    layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
     event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
-    highlight(on = 'plotly_click', off = "plotly_doubleclick",
-              persistent = TRUE) ## Allow selection of many points?
+    highlight(on = "plotly_selected", off = "plotly_deselect")
 }
 
 ## Other Selection options
