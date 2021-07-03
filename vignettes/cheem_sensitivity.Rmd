@@ -194,7 +194,7 @@ ggt2 <- ggplot_tour(gt_path, shap_scaled, angle = .1) +
   ggproto_data_background() +
   ggproto_data_points(aes_args = list(color = clas1, shape = clas2),
                       identity_args = list(size = 1.5, alpha = .7)) + 
-  ggtitle("NMDS of SHAP-Adelie space, sd scaled")
+  ggtitle("SHAP-Adelie space, sd scaled")
 
 animate_plotly(ggt1)
 animate_plotly(ggt2)

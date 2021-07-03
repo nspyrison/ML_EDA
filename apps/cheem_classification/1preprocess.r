@@ -12,27 +12,26 @@ require("palmerpenguins") ## data
 require("caret") ## One hot encoding class.
 require("plotly") ## Linked brushing
 ## Local files
-source("./apps/cheem/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
-source("./apps/cheem/spinifex_ggproto.r") ## New spinifex ggproto_* api
+source("./apps/cheem_classification/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
+source("./apps/cheem_classification/spinifex_ggproto.r") ## New spinifex ggproto_* api
 if(F){ ## Manually run to view file:
-  file.edit("./apps/cheem/trees_of_cheem.r")
-  file.edit("./apps/cheem/spinifex_ggproto.r")
+  file.edit("./apps/cheem_classification/trees_of_cheem.r")
+  file.edit("./apps/cheem_classification/spinifex_ggproto.r")
 }
 
 ## Setup ------
-
-# Data, palmerpenguins::penguins
-
-
-## Data setup
-raw <- palmerpenguins::penguins ## 5 missings, visdat::vis_miss(raw)
-raw_rmna <- raw[!is.na(raw$sex),]
+## Data setup, palmerpenguins::penguins
+raw <- palmerpenguins::penguins ## Missing values, visdat::vis_miss(raw)
+raw_rmna <- raw[!is.na(raw$sex), ]
 lvls <- levels(raw_rmna$species)
 ## Filter to closest 2 classes
 raw_rmna <- raw_rmna[raw_rmna$species %in% lvls[1:2], ]
-## Normalize each column by its standard deviations
+# ## Normalize each column by its ROW NORM?!, not applied yet
+# scale_row_norm <- function(data){
+#   return(t(apply(data, 1L, function(r){r / norm(matrix(r, nrow = 1))})))
+# }
 dat <- spinifex::scale_sd(raw_rmna[, 3:6]) %>% as.data.frame()
-clas1 <- factor(raw_rmna$species, levels = lvls[1:2]) ## manually remove 3rd lvl
+clas1 <- factor(raw_rmna$species, levels = lvls[1:2]) ## Manually remove 3rd lvl
 clas2 <- raw_rmna$sex
 if(F){
   table(clas1) ## Unbalenced island obs
@@ -71,7 +70,7 @@ toc()
 gc()
 tic("treeshap")
 for(i in 1:length(.lvls)){
-  .sub <- dat[clas1 == .lvls[i],]
+  .sub <- dat[clas1 == .lvls[i], ]
   .rf <- get(paste0('.rf', i))
   assign(paste0("treeshap", i),
          treeshap_df(.rf, .sub),
@@ -82,13 +81,7 @@ attr(shap_df, "data") <- dat
 toc()
 
 ## Create spaces! ------
-### Distance matrix
-tic("shap distance matrix, shap_dist_quartile")
-dist_dat <- as.matrix(dist(shap_df))
-dist_shap  <- as.matrix(dist(shap_df))
-colnames(dat_dist) <- colnames(shap_dist) <- NULL
-rownames(dat_dist) <- rownames(shap_dist) <- NULL
-toc() ## 1.46 Sec
+
 
 ### nMDS
 .n <- nrow(dat)
@@ -118,7 +111,7 @@ beepr::beep(4)
 ## EXPORT OBJECTS ----
 if(F){
   save(raw_rmna,
-       # dat,
+       #dat,
        clas1, clas2,
        # shap_df,
        # dist_dat,

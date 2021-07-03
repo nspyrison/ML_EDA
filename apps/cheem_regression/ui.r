@@ -42,14 +42,14 @@ if(F){ ## Not run, source/open local function files relative to proj
 .lb_maha <- quantile(maha_lookup_df$maha_dist, probs = .9)
 .idx <- maha_lookup_df$maha_dist > .lb_maha
 maha_lookup_df <- maha_lookup_df[.idx,]
-dat <- dat[.idx,]
+dat <- dat[.idx, ]
 bound_spaces_df <- bound_spaces_df[rep_len(.idx, .nn),]
 .clr <- log(.clr[rep_len(.idx, .nn)])
 hk <- bound_spaces_df %>%
   highlight_key(~rownum)
-g <- ggplot(hk, aes(V1, V2, info = info, color = .clr)) +
+g <- ggplot(hk, aes(V1, V2, info = info, color = x_maha_dist)) +
   geom_point() +
-  facet_grid(rows = vars(data), cols = vars(space)) +
+  facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
   theme_bw() +
   theme(axis.text  = element_blank(),
         axis.ticks = element_blank(),
@@ -58,7 +58,7 @@ g <- ggplot(hk, aes(V1, V2, info = info, color = .clr)) +
   
 
 ##### tab1_cheem ----
-tab1_cheem <- tabPanel(title = "SHAP matrix sensitivity -- FIFA", fluidPage(
+tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
   ## Top input row ----
   fluidRow(
     # column(width = 4L,
@@ -107,7 +107,7 @@ tab2_about <- tabPanel("About", fluidPage(
     Doing so allows them to be more accurate, but makes them unrealistically complex to parse and interpret the reasoning and weights used. 
     We want to impove the interprebility of black box models."),
   img(src = "lime_nonlinear.PNG"),
-  p('Ribeiro, M. et. al. (2017). Why Should I Trust You?. ', a(href = 'file:///C:/Users/spyri/Zotero/storage/52VPUVK6/1602.html', 'file:///C:/Users/spyri/Zotero/storage/52VPUVK6/1602.html', .noWS = "outside"), '!', .noWS = c("after-begin", "before-end")),
+  p('Ribeiro, M. et. al. (2017). Why Should I Trust You?. ', a(href = 'https://www.kdd.org/kdd2016/papers/files/rfp0573-ribeiroA.pdf', 'https://www.kdd.org/kdd2016/papers/files/rfp0573-ribeiroA.pdf', .noWS = "outside"), '!', .noWS = c("after-begin", "before-end")),
   p("Recently, there have been advances in interegating or explaining agnostic models within the local vacinity of a new observation. 
     Some of the original methods of such local explainations of models (Lundberg, 2017) include: LIME, DeepLIFT, and SHAP.
     Here, we build a random foest model (in light of speed), extract SHAP local attributions -- 

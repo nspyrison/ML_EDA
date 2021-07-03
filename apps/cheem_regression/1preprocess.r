@@ -1,3 +1,5 @@
+### MANUAL C+P PREPROCESS1 TRYING TO FIX NMDS PIPING -----
+
 ## Creates objs for use in shiny app:
 
 ## Dependencies ------
@@ -93,23 +95,14 @@ system.time(
                                     data = data.frame(tgt_var, dat_fld),
                                     mtry = .rf_mtry)
 )
-
-
-## Mahalonobis lookup ----
-.maha_dist <-
-  mahalanobis(dat_fld, colMeans(dat_fld), cov(dat_fld)) %>%
-  sort(decreasing = TRUE)
-maha_lookup_df <- data.frame(rownum = 1:nrow(dat_fld),
-                             name = rownames(dat_fld),
-                             maha_dist = round(.maha_dist, digits = 1L))
-
+pred <- predict(.rf, newdata = dat_fld) ## newdata doesn't have Y
+resid <- tgt_var - pred
 
 ## shap_df {treeshap} ------
 dat_1 <- dat_fld[0001:1100, ]
 dat_2 <- dat_fld[1101:2200, ]
 dat_3 <- dat_fld[2201:3300, ]
 dat_4 <- dat_fld[3301:nrow(dat_fld), ] ## nrow = 4533
-
 tic("treeshap")
 gc();Sys.time()
 (mbm1 <- microbenchmark::microbenchmark(
@@ -129,69 +122,82 @@ shap_df <- rbind(shap_df1, shap_df2, shap_df3, shap_df4)
 attr(shap_df, "data") <- dat_fld ## Similarly append data
 toc()
 beepr::beep(4)
+if(F){
+  
+  save(shap_df, file = "z_shap_df.RData") ## Single obj: shap_df
+  file.copy("./z_shap_df.RData", to = "./apps/cheem_regression/data/z_shap_df.RData", overwrite = TRUE)
+  file.remove("./z_shap_df.RData")
+  rm(list = c(paste0("shap_df", 1L:4L), paste0("dat_", 1L:4L)))
+}
 if(F)
-  rm(list= c(paste0("shap_df", 1:4L), paste0("dat_", 1:4L)))
+  load("./apps/cheem_regression/data/z_shap_df.RData")
 
 
-# ## shap_dist_mat, shap_dist_quartile ------
-# tic("shap distance matrix, shap_dist_quartile")
-# shap_dist_mat <- as.matrix(dist(shap_df))
-# colnames(shap_dist_mat) <- NULL
-# rownames(shap_dist_mat) <- NULL
-# ## Init
-# quantiles <- data.frame(matrix(NA, ncol=5))
-# colnames(quantiles) <- paste0(seq(0, 100, 25), "pct")
-# shap_dist_quartile <- data.frame(matrix(NA, nrow(shap_df), nrow(shap_df)))
-# sapply(1L:ncol(shap_dist_mat), function(i){
-#   vect <- shap_dist_mat[, i]
-#   quantiles[i,] <<- quantile(vect, probs = seq(0, 1, .25))
-#   shap_dist_quartile[, i] <<- dplyr::case_when(
-#     vect >= quantiles[i, 1] & vect <= quantiles[i, 2] ~ 1L,
-#     vect >= quantiles[i, 2] & vect <= quantiles[i, 3] ~ 2L,
-#     vect >= quantiles[i, 3] & vect <= quantiles[i, 4] ~ 3L,
-#     vect >= quantiles[i, 4] & vect <= quantiles[i, 5] ~ 4L)
-# })
-# hist(quantiles[,5])
-# toc() ## 1.46 Sec
+## Cross mahalonobis dist ----
+maha_df_of <- function(x){ ## dist from in-class column median(x), cov(x)
+  maha_vect <- mahalanobis(x, apply(x, 2L, median), cov(x))
+  data.frame(rownum = 1:nrow(x),
+             name = rownames(x),
+             maha_dist = round(maha_vect, digits = 1L),
+             maha_rank = rank(maha_vect)) %>%
+    return()
+}
+maha_dat  <- maha_df_of(dat_fld)
+maha_shap <- maha_df_of(shap_df)
 
 ## Create spaces! ------
 ### nMDS
 .n <- nrow(dat_fld)
 .nms <- rownames(dat_fld)
 tic("nMDS");Sys.time()
-nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat_fld))$points) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "nMDS")
-beepr::beep(1)
-nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "nMDS")
-beepr::beep(4)
+nmds_df_of <- function(x, data_nm = substitute(x)){
+  nmds_mat <- MASS::isoMDS(dist(x))$points
+  nmds_mat %>%
+    spinifex::scale_sd %>%
+    as.data.frame %>%
+    cbind(1L:nrow(x), data_nm, "nMDS") %>%
+    return
+}
+nmds_dat  <- nmds_df_of(dat_fld, "data") %>%
+  rbind(maha_shap$maha_dist) ## nmds data with maha of shap
+nmds_shap <- nmds_df_of(shap_df, "shap") %>%
+  rbind(maha_dat$maha_dist) ## nmds shap with maha of data
 toc()
+beepr::beep(4)
 
 ### PCA
 tic("pca")
 pca_dat  <- as.matrix(dat_fld) %*% spinifex::basis_pca(dat_fld) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA")
+  scale_sd() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA") %>%
+  rbind(maha_shap$maha_dist) ## nmds data with maha of shap
 pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA")
+  scale_sd() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA") %>%
+  rbind(maha_dat$maha_dist) ## nmds shap with maha of data
 toc()
-
 
 ### Combine
 names(nmds_dat) <- names(nmds_shap) <- names(pca_dat) <- names(pca_shap) <-
-  c(paste0("V", 1:2), "rownum", "data", "space")
+  c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "x_maha_dist")
+## "data" is data vs shap the "observation type"
+## "space" is nMDS, PCA, oLDA the "variable/feature space"
+### this is hard coded in the plot production if changed will need to be changed in the app, and mock-up below. 
 bound_spaces_df <- rbind(nmds_dat, nmds_shap, pca_dat, pca_shap)
 .nms <- rep_len(rownames(dat_fld), nrow(bound_spaces_df))
-bound_spaces_df <- bound_spaces_df %>% 
+bound_spaces_df <- bound_spaces_df %>%
   mutate(info = paste0("row: ", rownum, ", ", .nms))
 beepr::beep(4)
 
-## combine X, Y and decode info for disp.
-dat <- data.frame(1:nrow(dat_fld), 
-                  paste0("row: ", 1:nrow(dat_fld), ",", rownames(dat_fld)), 
-                  maha_lookup_df$maha_dist,
-                  tgt_var, 
+## Combine X, Y and decode info for disp.
+
+dat <- data.frame(1:nrow(dat_fld),
+                  maha_dat$maha_dist,
+                  maha_shap$maha_dist,
+                  pred,
+                  tgt_var,
+                  resid,
                   dat_fld)
-colnames(dat) <- c("rownum", "info", "maha_dist", "wage_eruo", colnames(dat_fld))
+colnames(dat) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
+                   "predicted_wage", "residual", "wage_eruo", colnames(dat_fld))
 ## EXPORT OBJECTS ----
 if(F){
   save(dat,
@@ -217,7 +223,7 @@ if(F){
     highlight_key(~rownum)
   g <- ggplot(hk, aes(V1, V2, rownum = rownum)) +
     geom_point() +
-    facet_grid(rows = vars(data), cols = vars(space)) +
+    facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
     theme_bw() +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank()) +
