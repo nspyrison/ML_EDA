@@ -31,7 +31,7 @@ server <- function(input, output, session){
   output$selected_df <- DT::renderDT({ ## Original data of selection
     d <- event_data("plotly_selected")
     if (is.null(d)) return(NULL)
-    return(DT::datatable(dat[dat$rownum == d$key, ], rownames = TRUE))
+    return(DT::datatable(dat[dat$rownum %in% d$key, ], rownames = TRUE))
   })
 } ### close function, assigning server.
 

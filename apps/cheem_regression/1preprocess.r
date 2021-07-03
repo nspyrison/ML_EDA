@@ -74,9 +74,10 @@ dat <- .scaled %>% dplyr::mutate(
 ## Assume the 2nd cluster is goalkeepers, filter on GK and then remove:
 dat_gk  <- dat[dat$gk >= .5, ] ## 467 obs, 9.34%
 dat_fld <- dat[dat$gk < .5, -9] ## remaining 91%, fielders
-
+dat_fld <- scale_01(dat_fld) ## scale again after removing.
+ 
 ## Normalize each column by its standard deviations
-tgt_var <- .raw$wage_eur[dat$gk < .5] ## Unscaled wages of the fielders
+tgt_var <- .raw$wage_eur[dat$gk < .5] ## Unsealed wages of the fielders
 
 ## Validation projection, 2nd cluster gone after removing gk!
 if(F){
@@ -133,16 +134,13 @@ if(F)
 
 
 ## Cross mahalonobis dist ----
-maha_df_of <- function(x){ ## dist from in-class column median(x), cov(x)
-  maha_vect <- mahalanobis(x, apply(x, 2L, median), cov(x))
-  data.frame(rownum = 1:nrow(x),
-             name = rownames(x),
-             maha_dist = round(maha_vect, digits = 1L),
-             maha_rank = rank(maha_vect)) %>%
-    return()
+maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
+  mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
+    matrix(ncol = 1) %>% scale_01() %>% 
+    return
 }
-maha_dat  <- maha_df_of(dat_fld)
-maha_shap <- maha_df_of(shap_df)
+maha_dat  <- maha_vect_of(dat_fld)
+maha_shap <- maha_vect_of(shap_df)
 
 ## Create spaces! ------
 ### nMDS
@@ -157,10 +155,8 @@ nmds_df_of <- function(x, data_nm = substitute(x)){
     return
 }
 tic("nMDS");Sys.time()
-nmds_dat  <- nmds_df_of(dat_fld, "data") %>%
-  cbind(maha_shap$maha_dist) ## nmds data with maha of shap
-nmds_shap <- nmds_df_of(shap_df, "shap") %>%
-  cbind(maha_dat$maha_dist) ## nmds shap with maha of data
+nmds_dat  <- nmds_df_of(dat_fld, "data")
+nmds_shap <- nmds_df_of(shap_df, "shap")
 toc() ## ~480 sec
 beepr::beep(4)
 
@@ -171,34 +167,39 @@ pca_df_of <- function(x, data_nm = substitute(x)){
     return
 }
 tic("pca")
-pca_dat <- pca_df_of(dat_fld, "data") %>%
-  cbind(maha_shap$maha_dist) ## nmds data with maha of shap
-pca_shap <- pca_df_of(shap_df, "shap") %>%
-  cbind(maha_dat$maha_dist) ## nmds shap with maha of data
+pca_dat  <- pca_df_of(dat_fld, "data")
+pca_shap <- pca_df_of(shap_df, "shap")
 toc() ## ~4 sec
 
 ### Combine
 #df_ls <- list(nmds_dat, nmds_shap, pca_dat, pca_shap)
 #lapply(df_ls, dim)
-names(nmds_dat) <- names(nmds_shap) <- names(pca_dat) <- names(pca_shap) <-
-  c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "x_maha_dist")
-### this is hard coded in the plot production if changed will need to be changed in the app, and mock-up below. 
-bound_spaces_df <- rbind(nmds_dat, nmds_shap, pca_dat, pca_shap)
+bnmds_dat  <- cbind(nmds_dat,  maha_shap, maha_dat, maha_shap)
+bnmds_shap <- cbind(nmds_shap, maha_dat,  maha_dat, maha_shap)
+bpca_dat   <- cbind(pca_dat,   maha_shap, maha_dat, maha_shap)
+bpca_shap  <- cbind(pca_shap,  maha_dat,  maha_dat, maha_shap)
+names(bnmds_dat) <- names(bnmds_shap) <- names(bpca_dat) <- names(bpca_shap) <-
+  c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross", "maha_dat", "maha_shap")
+
+bound_spaces_df <- rbind(bnmds_dat ,
+                         bnmds_shap,
+                         bpca_dat  ,
+                         bpca_shap)
 .nms <- rep_len(rownames(dat_fld), nrow(bound_spaces_df))
 bound_spaces_df <- bound_spaces_df %>%
   mutate(info = paste0("row: ", rownum, ", ", .nms))
 beepr::beep(4)
 
-## Combine X, Y and decode info for disp.
+## Combine X, Y and decode info for display
 dat <- data.frame(1:nrow(dat_fld),
-                  maha_dat$maha_dist,
-                  maha_shap$maha_dist,
-                  pred,
+                  maha_dat,
+                  maha_shap,
                   tgt_var,
-                  resid,
+                  round(pred),
+                  round(resid),
                   dat_fld)
 colnames(dat) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
-                   "predicted_wage", "residual", "wage_eruo", colnames(dat_fld))
+                   "obs_wage_euro", "predicted_wage", "residual", colnames(dat_fld))
 ## EXPORT OBJECTS ----
 if(F){
   save(dat, bound_spaces_df, file = "1preprocess.RData")

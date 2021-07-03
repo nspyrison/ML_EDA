@@ -51,14 +51,15 @@ print.treeshap_df <- function (x, ...){
 
 #' @examples
 #' ## Discrete supervised classification RF
-#' dat <- spinifex::scale_sd(tourr::flea[, 1:6])
-#' tgt_var <- flea$species
+#' dat <- spinifex::scale_sd(mtcars)
+#' tgt_var <- dat[, 1]
+#' xdat <- dat[, -1]
 #' 
-#' la_mat <- local_attribution_matrix(data = dat, target_var = tgt_var)
+#' la_df <- local_attribution_df(data = xdat, target_var = tgt_var)
 #' GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
-## Assumes pkg "doParallel", see fastshap, and treeshap....
-local_attribution_matrix <- function(
-  data, y,
+## Local attribution df from DALEX
+local_attribution_df <- function(
+  data, target_var,
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
@@ -90,15 +91,9 @@ local_attribution_matrix <- function(
                            label = paste0(parts_type, " local attribution of random forest model"))
   
   #### Iterating over each each observation:
-  ret <- list(NULL)
-  doParallel::registerDoParallel(cores = n_cores) #in windows by default 2, in general n-1
-  .r_idx <- 1:.n
-
-  ## Parallelized for each row num -----
-  ret <- foreach::foreach(i = .r_idx,
-                 .packages = c("DALEX", "treeshap", "spinifex", "tourr"),
-                 .combine = rbind,
-  ) %dopar% {
+  ret <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
+  ##for each row num -----
+  sapply(1L:nrow(data), function(i){
     .parts <- DALEX::predict_parts(explainer = .ex_rf,
                                    new_observation =  data[i,, drop = FALSE],
                                    type = parts_type,
@@ -120,24 +115,17 @@ local_attribution_matrix <- function(
     .df_la   <- .df_la[.row_idx, ]
     
     ## Single obs of local attribution matrix
-    .obs_local_attr <- .df_la$median_local_attr
-    if(do_normalize_rows == TRUE)
-      .obs_local_attr <- tourr::normalise(.obs_local_attr)
-    colnames(.obs_local_attr) <- parts_type
-    rownames(.obs_local_attr) <- .df_la$variable_name
-    
-    if(i %% 10 == 0) print(paste0("Done with i = ", i, " of ", nrow(data)))
-    ## Keep attributes and assign
-    attr(.obs_local_attr, "predict_parts") <- .parts
-  }
+    ret[i, ] <<- .df_la$median_local_attr
+    if(i %% 10 == 0) print(paste0("Done with ", i, " of ", nrow(data)))
+  })
   
   ## Format
-  doParallel::stopImplicitCluster()
   .rn <- rownames(data)
   if(is.null(.rn) == TRUE) .rn <- 1L:.n
   rownames(ret) <- paste0(parts_type, " of ", .rn)
   colnames(ret) <- colnames(data)
-  attr(ret, "class") <- c("local_attribution_list", "list")
+  ret <- as.data.frame(ret)
+  attr(ret, "class") <- c("local_attribution_df", "data.frame")
   
   ## Return
   return(ret)

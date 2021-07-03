@@ -32,21 +32,22 @@ if(F){ ## Not run, source/open local function files relative to proj
 ## Initialize
 .nn <- nrow(bound_spaces_df)
 ## too busy; cut out lowest 90% by maha dist
-.lb_maha <- quantile(dat$maha_dist_dat, probs = .9)
+.lb_maha <- quantile(dat$maha_dist_dat, probs = 0.9)
 .idx <- dat$maha_dist_dat > .lb_maha
 dat <- dat[.idx, ]
 bound_spaces_df <- bound_spaces_df[rep_len(.idx, .nn),]
 g <- bound_spaces_df %>%
   highlight_key(~rownum) %>% 
-  ggplot(aes(V1, V2, info = info, color = log(x_maha_dist))) +
+  ggplot(aes(V1, V2, info = info, 
+                    color = maha_cross)) +
   geom_point() +
   facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
   theme_bw() +
   theme(axis.text  = element_blank(),
         axis.ticks = element_blank(),
         legend.text = element_blank()) +
-  scale_color_continuous(name = "log \n mahalonobis \n distance") ## Manual legend title
-  
+  scale_color_continuous(type = "viridis",name = "normalized \n mahalonobis \n distance") ## Manual legend title
+ # scale_color_viridis_c(name = "log \n mahalonobis \n distance")
 
 ##### tab1_cheem ----
 tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
@@ -64,7 +65,7 @@ tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
            p("2) Create a Random Forest model predicting wages given our 8 physical and skill attributes."),
            p("3) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, via {treeshap})."),
            p("4) Solve the nMDS of the distance matrices, and pca for the data and SHAP values."),
-           p("5) For app performance, don't plot the players with the lowest 90% of mahalonobis distances."),
+           p("5) after processing, in light of occlusion and performance, don't plot the players with the lowest 90% of mahalonobis distances."),
            p("- Load above objects into shiny app; explore with shiny/ggplot2/GGally/plotly."),
            # fluidRow(
            #   column(6L, numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L)),
