@@ -111,11 +111,7 @@ beepr::beep(4)
 ## EXPORT OBJECTS ----
 if(F){
   save(raw_rmna,
-       #dat,
        clas1, clas2,
-       # shap_df,
-       # dist_dat,
-       # dist_shap,
        bound_spaces_df,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem_classification/data/1preprocess.RData", overwrite = TRUE)
