@@ -3,12 +3,8 @@
 #' June 2021
 
 #### Dependencies -----
-# ## Primary work packages
-# require("DALEX")
-# require("spinifex")
-# require("tourr")
-# require("ggplot2")
 ## EDA and utility
+require("ggplot2")
 require("GGally")
 require("plotly")
 require("magrittr")
@@ -20,11 +16,9 @@ require("DT") ## For html table and buttons
 
 ## Local functions
 source("trees_of_cheem.r")   ## Cheem functions
-source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
+# source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
 ## Load objs
-load("./data/1preprocess.RData")
-## Loads the following objects:
-## dat, tgt_var, maha_lookup_df, shap_df, bound_spaces_df
+load("./data/1preprocess.RData") ## Loads the objects: dat, bound_spaces_df
 if(F)
   load("./apps/cheem_regression/data/1preprocess.RData")
 if(F){ ## Not run, source/open local function files relative to proj
@@ -37,17 +31,14 @@ if(F){ ## Not run, source/open local function files relative to proj
 
 ## Initialize
 .nn <- nrow(bound_spaces_df)
-.clr <- rep_len(maha_lookup_df$maha_dist, .nn)
 ## too busy; cut out lowest 90% by maha dist
-.lb_maha <- quantile(maha_lookup_df$maha_dist, probs = .9)
-.idx <- maha_lookup_df$maha_dist > .lb_maha
-maha_lookup_df <- maha_lookup_df[.idx,]
+.lb_maha <- quantile(dat$maha_dist_dat, probs = .9)
+.idx <- dat$maha_dist_dat > .lb_maha
 dat <- dat[.idx, ]
 bound_spaces_df <- bound_spaces_df[rep_len(.idx, .nn),]
-.clr <- log(.clr[rep_len(.idx, .nn)])
-hk <- bound_spaces_df %>%
-  highlight_key(~rownum)
-g <- ggplot(hk, aes(V1, V2, info = info, color = x_maha_dist)) +
+g <- bound_spaces_df %>%
+  highlight_key(~rownum) %>% 
+  ggplot(aes(V1, V2, info = info, color = log(x_maha_dist))) +
   geom_point() +
   facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
   theme_bw() +

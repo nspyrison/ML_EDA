@@ -120,10 +120,9 @@ gc();Sys.time()
 gc();Sys.time()
 shap_df <- rbind(shap_df1, shap_df2, shap_df3, shap_df4)
 attr(shap_df, "data") <- dat_fld ## Similarly append data
-toc()
+toc() ## ~900sec, 15 min
 beepr::beep(4)
 if(F){
-  
   save(shap_df, file = "z_shap_df.RData") ## Single obj: shap_df
   file.copy("./z_shap_df.RData", to = "./apps/cheem_regression/data/z_shap_df.RData", overwrite = TRUE)
   file.remove("./z_shap_df.RData")
@@ -149,37 +148,40 @@ maha_shap <- maha_df_of(shap_df)
 ### nMDS
 .n <- nrow(dat_fld)
 .nms <- rownames(dat_fld)
-tic("nMDS");Sys.time()
 nmds_df_of <- function(x, data_nm = substitute(x)){
   nmds_mat <- MASS::isoMDS(dist(x))$points
   nmds_mat %>%
-    spinifex::scale_sd %>%
+    scale_01 %>%
     as.data.frame %>%
     cbind(1L:nrow(x), data_nm, "nMDS") %>%
     return
 }
+tic("nMDS");Sys.time()
 nmds_dat  <- nmds_df_of(dat_fld, "data") %>%
-  rbind(maha_shap$maha_dist) ## nmds data with maha of shap
+  cbind(maha_shap$maha_dist) ## nmds data with maha of shap
 nmds_shap <- nmds_df_of(shap_df, "shap") %>%
-  rbind(maha_dat$maha_dist) ## nmds shap with maha of data
-toc()
+  cbind(maha_dat$maha_dist) ## nmds shap with maha of data
+toc() ## ~480 sec
 beepr::beep(4)
 
 ### PCA
+pca_df_of <- function(x, data_nm = substitute(x)){
+  x %>% as.matrix() %*% spinifex::basis_pca(dat_fld) %>%
+    scale_01 %>% as.data.frame %>% cbind(1:.n, data_nm, "PCA") %>%
+    return
+}
 tic("pca")
-pca_dat  <- as.matrix(dat_fld) %*% spinifex::basis_pca(dat_fld) %>%
-  scale_sd() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA") %>%
-  rbind(maha_shap$maha_dist) ## nmds data with maha of shap
-pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
-  scale_sd() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA") %>%
-  rbind(maha_dat$maha_dist) ## nmds shap with maha of data
-toc()
+pca_dat <- pca_df_of(dat_fld, "data") %>%
+  cbind(maha_shap$maha_dist) ## nmds data with maha of shap
+pca_shap <- pca_df_of(shap_df, "shap") %>%
+  cbind(maha_dat$maha_dist) ## nmds shap with maha of data
+toc() ## ~4 sec
 
 ### Combine
+#df_ls <- list(nmds_dat, nmds_shap, pca_dat, pca_shap)
+#lapply(df_ls, dim)
 names(nmds_dat) <- names(nmds_shap) <- names(pca_dat) <- names(pca_shap) <-
   c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "x_maha_dist")
-## "data" is data vs shap the "observation type"
-## "space" is nMDS, PCA, oLDA the "variable/feature space"
 ### this is hard coded in the plot production if changed will need to be changed in the app, and mock-up below. 
 bound_spaces_df <- rbind(nmds_dat, nmds_shap, pca_dat, pca_shap)
 .nms <- rep_len(rownames(dat_fld), nrow(bound_spaces_df))
@@ -188,7 +190,6 @@ bound_spaces_df <- bound_spaces_df %>%
 beepr::beep(4)
 
 ## Combine X, Y and decode info for disp.
-
 dat <- data.frame(1:nrow(dat_fld),
                   maha_dat$maha_dist,
                   maha_shap$maha_dist,
@@ -200,28 +201,22 @@ colnames(dat) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
                    "predicted_wage", "residual", "wage_eruo", colnames(dat_fld))
 ## EXPORT OBJECTS ----
 if(F){
-  save(dat,
-       tgt_var,
-       maha_lookup_df,
-       bound_spaces_df,
-       file = "1preprocess.RData")
+  save(dat, bound_spaces_df, file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem_regression/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
 }
 if(F)
   load("./apps/cheem_regression/data/1preprocess.RData")
 
-
 ## Mock-up visual ------
 if(F){
   require("ggplot2")
   tic("prep ggplot")
   str(bound_spaces_df)
-  .nn <- nrow(bound_spaces_df)
   
-  hk <- bound_spaces_df %>%
-    highlight_key(~rownum)
-  g <- ggplot(hk, aes(V1, V2, rownum = rownum)) +
+  g <- bound_spaces_df %>%
+    highlight_key(~rownum) %>% 
+    ggplot(hk, aes(V1, V2, rownum = rownum)) +
     geom_point() +
     facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
     theme_bw() +

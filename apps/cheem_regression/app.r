@@ -5,12 +5,10 @@
 source("ui.r", local = TRUE, encoding = "utf-8")
 
 server <- function(input, output, session){
-  
   ### maha_lookup_DT -----
   output$maha_lookup_DT <- DT::renderDT({
-    DT::datatable(
-      maha_lookup_df[, 1L:3L], rownames = FALSE,
-      options = list(pageLength = 5L))
+    DT::datatable(dat[, 1L:5L], rownames = TRUE,
+                  options = list(pageLength = 5L))
   })
   outputOptions(output, "maha_lookup_DT", suspendWhenHidden = FALSE) ## Eager evaluation
   
@@ -25,7 +23,6 @@ server <- function(input, output, session){
   })
   
   ## Selection data lookup ------
-  ## What ggplotly sees
   output$selected_plot_df <- renderPrint({
     d <- event_data("plotly_selected")
     if (is.null(d)) "Selected point appears here (double-click to clear)" # else d
@@ -36,7 +33,6 @@ server <- function(input, output, session){
     if (is.null(d)) return(NULL)
     return(DT::datatable(dat[dat$rownum == d$key, ], rownames = TRUE))
   })
-  
 } ### close function, assigning server.
 
 shinyApp(ui = ui, server = server)
