@@ -7,7 +7,7 @@ source("ui.r", local = TRUE, encoding = "utf-8")
 server <- function(input, output, session){
   ### maha_lookup_DT -----
   output$maha_lookup_DT <- DT::renderDT({
-    DT::datatable(dat[, 1L:5L], rownames = TRUE,
+    DT::datatable(df_pts[, 1L:5L], rownames = TRUE,
                   options = list(pageLength = 5L))
   })
   outputOptions(output, "maha_lookup_DT", suspendWhenHidden = FALSE) ## Eager evaluation

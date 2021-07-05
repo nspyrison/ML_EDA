@@ -29,25 +29,42 @@ if(F){ ## Not run, source/open local function files relative to proj
   file.edit("./apps/cheem_regression/1preprocess.r")
 }
 
-## Initialize
-.nn <- nrow(bound_spaces_df)
-## too busy; cut out lowest 90% by maha dist
-.lb_maha <- quantile(dat$maha_dist_dat, probs = 0.9)
-.idx <- dat$maha_dist_dat > .lb_maha
-dat <- dat[.idx, ]
-bound_spaces_df <- bound_spaces_df[rep_len(.idx, .nn),]
-g <- bound_spaces_df %>%
-  highlight_key(~rownum) %>% 
-  ggplot(aes(V1, V2, info = info, 
-                    color = maha_cross)) +
-  geom_point() +
-  facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
+## Prep gg plot -----
+## grey and color pts
+df <- bound_spaces_df
+idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .98)
+idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .98)
+pts_idx <- idx_dat | idx_shap
+grey_pts_idx <- !pts_idx
+sum(pts_idx)/4
+## find txt pts
+idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .999)
+idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .999)
+txt_pts_idx <- idx_dat | idx_shap
+sum(txt_pts_idx)/4
+## Plot
+g <- df[pts_idx, ] %>%
+  ## Plotly interaction key
+  plotly::highlight_key(~rownum) %>%
+  ggplot(aes(V1, V2)) +
+  ## Grey points
+  geom_point(aes(shape = maha_shape), data = df[grey_pts_idx, ], color = "grey") +
+  ## Density contours, .99, .5, .1, .01
+  geom_density2d(aes(V1, V2), df, color = "black",
+                 contour_var = "ndensity", breaks = c(.1, .5, .9, .99)) +
+  ## Color points
+  geom_point(aes(info = info, color = maha_cross,
+                 shape = maha_shape)) +
+  ## Text points
+  geom_text(aes(label = rowname), df[txt_pts_idx, ], color = "blue") +
+  facet_grid(rows = vars(obs_type), cols = vars(var_space), scales = "free") +
   theme_bw() +
   theme(axis.text  = element_blank(),
-        axis.ticks = element_blank(),
-        legend.text = element_blank()) +
-  scale_color_continuous(type = "viridis",name = "normalized \n mahalonobis \n distance") ## Manual legend title
- # scale_color_viridis_c(name = "log \n mahalonobis \n distance")
+        axis.ticks = element_blank()) +
+  scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed", 
+                         type = "viridis") +
+  scale_shape_discrete(name = "")
+
 
 ##### tab1_cheem ----
 tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
@@ -61,16 +78,12 @@ tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
     # ),
     column(width = 8L,
            h3("FIFA 2020, preprocess:"),
-           p("1) Take the original 42 attributes, Hold wages (in Euros) as our target Y, aggregate correlated, redundant variables in 8 X skill attributes."),
-           p("2) Create a Random Forest model predicting wages given our 8 physical and skill attributes."),
-           p("3) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, via {treeshap})."),
-           p("4) Solve the nMDS of the distance matrices, and pca for the data and SHAP values."),
-           p("5) after processing, in light of occlusion and performance, don't plot the players with the lowest 90% of mahalonobis distances."),
-           p("- Load above objects into shiny app; explore with shiny/ggplot2/GGally/plotly."),
-           # fluidRow(
-           #   column(6L, numericInput("lookup_rownum", "Player id", 1L, 1L, 5000L)),
-           #   column(6L, numericInput("plot_cols", "For first ? columns [1, 8]", 3L, 1L, 8L))
-           # )
+           p("1) Take the original 42 attributes, hold wages (in Euros) as our target Y, aggregate correlated variables down to 8 X, skill attributes."),
+           p("2) Remove the goalkeepers, (should be fit with different model), 9.3% of rows."),
+           p("3) Create a Random Forest model predicting wages given our 8 skill attributes. (~12 sec)"),
+           p("4) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, via {treeshap}, (~900 sec))."),
+           p("5) Extract mMDS (~480 sec), pca, and mahalonobist dist for both data and SHAP values."),
+           p("- Load above objects into shiny app; explore with ggplot2/plotly.")
     )
   ),
   
@@ -78,9 +91,11 @@ tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
   fluidRow(
     shiny::hr(),
     h3("FIFA 2020 Fielders"),
-    h4("Colored by SHAP matrix distance from this player:"),
-    p("Explore sensitivity of the SHAP matrix against that the original data."),
-    p("Drag to select 1 point, double click to remove the selection. (Box select causes app to hang)."),
+    h4("Explore sensitivity of the SHAP matrix against that the original data."),
+    p("Highlighting points: click, or click and drag to select, double click to remove the selection."),
+    p("Black contours: contours on projection density c(.1, ,.5, .9, .99)"),
+    p("Colored points: players with top 2% maha distances in data or shap space."),
+    p("Blue text: players with top 0.1% maha distances in data or shap space."),
     plotly::plotlyOutput("main_plot", width = "100%", height = "600px") %>%
       shinycssloaders::withSpinner(type = 8L),
     shiny::hr(),

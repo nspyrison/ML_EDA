@@ -11,11 +11,9 @@ require("tictoc")
 require("dplyr")
 ## Local files
 source("./apps/cheem_classification/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
-source("./apps/cheem_classification/spinifex_ggproto.r") ## New spinifex ggproto_* api
-if(F){ ## Manually run to view file:
+if(F) ## Manually run to view file:
   file.edit("./apps/cheem_classification/trees_of_cheem.r")
-  file.edit("./apps/cheem_classification/spinifex_ggproto.r")
-}
+
 
 ## Setup ------
 .raw <- DALEX::fifa
@@ -95,7 +93,7 @@ system.time(
   .rf <- randomForest::randomForest(tgt_var~.,
                                     data = data.frame(tgt_var, dat_fld),
                                     mtry = .rf_mtry)
-)
+) ## ~ 12 sec
 pred <- predict(.rf, newdata = dat_fld) ## newdata doesn't have Y
 resid <- tgt_var - pred
 
@@ -124,7 +122,7 @@ attr(shap_df, "data") <- dat_fld ## Similarly append data
 toc() ## ~900sec, 15 min
 beepr::beep(4)
 if(F){
-  save(shap_df, file = "z_shap_df.RData") ## Single obj: shap_df
+  save(shap_df, file = "z_shap_df.RData") ## Single obj: .rf, shap_df, 
   file.copy("./z_shap_df.RData", to = "./apps/cheem_regression/data/z_shap_df.RData", overwrite = TRUE)
   file.remove("./z_shap_df.RData")
   rm(list = c(paste0("shap_df", 1L:4L), paste0("dat_", 1L:4L)))
@@ -133,15 +131,31 @@ if(F)
   load("./apps/cheem_regression/data/z_shap_df.RData")
 
 
-## Cross mahalonobis dist ----
+## mahalonobis dist?, then normalize ----
 maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
   mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
-    matrix(ncol = 1) %>% scale_01() %>% 
+    matrix(ncol = 1) %>% #log() %>% 
+    scale_01() %>% 
     return
 }
 maha_dat  <- maha_vect_of(dat_fld)
 maha_shap <- maha_vect_of(shap_df)
+maha_delta  <- maha_shap - maha_dat
+summary(maha_delta) ## there are few negative values; 
+### fewer pts are further away in shap sp than data space
+### will these be under represented? i think so, may need to handle alpha differently.
+#maha_alpha <- .2 + .8 * scale_01(abs(maha_delta - median(maha_delta)))^2 ## distance from mediant of delta to balence fewer neg.
+maha_color <- maha_delta
+maha_shape <- factor(maha_delta >= 0, 
+                     levels = c(FALSE, TRUE),
+                     labels = c("maha SHAP larger, ", "maha data larger"))
 
+## DOES REMOVING 90% lowest maha_dat remove the correct points!?
+if(F){
+  hist(maha_del)
+  .lb <- quantile(maha_dat, probs = .9)
+  summary(maha_alpha[dat_fld >= .lb]) ## NOT REALLY removing lots high deltas too.
+}
 ## Create spaces! ------
 ### nMDS
 .n <- nrow(dat_fld)
@@ -157,7 +171,7 @@ nmds_df_of <- function(x, data_nm = substitute(x)){
 tic("nMDS");Sys.time()
 nmds_dat  <- nmds_df_of(dat_fld, "data")
 nmds_shap <- nmds_df_of(shap_df, "shap")
-toc() ## ~480 sec
+toc() ## ~480 sec, 8 min
 beepr::beep(4)
 
 ### PCA
@@ -174,20 +188,28 @@ toc() ## ~4 sec
 ### Combine
 #df_ls <- list(nmds_dat, nmds_shap, pca_dat, pca_shap)
 #lapply(df_ls, dim)
-bnmds_dat  <- cbind(nmds_dat,  maha_shap, maha_dat, maha_shap)
-bnmds_shap <- cbind(nmds_shap, maha_dat,  maha_dat, maha_shap)
-bpca_dat   <- cbind(pca_dat,   maha_shap, maha_dat, maha_shap)
-bpca_shap  <- cbind(pca_shap,  maha_dat,  maha_dat, maha_shap)
+bnmds_dat  <- cbind(nmds_dat,  maha_shap)
+bnmds_shap <- cbind(nmds_shap, maha_dat)
+bpca_dat   <- cbind(pca_dat,   maha_shap)
+bpca_shap  <- cbind(pca_shap,  maha_dat)
 names(bnmds_dat) <- names(bnmds_shap) <- names(bpca_dat) <- names(bpca_shap) <-
-  c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross", "maha_dat", "maha_shap")
+  c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross")
 
 bound_spaces_df <- rbind(bnmds_dat ,
                          bnmds_shap,
                          bpca_dat  ,
                          bpca_shap)
-.nms <- rep_len(rownames(dat_fld), nrow(bound_spaces_df))
+.NN <- nrow(bound_spaces_df)
+.nms          <- rep_len(rownames(dat_fld), .NN)
 bound_spaces_df <- bound_spaces_df %>%
-  mutate(info = paste0("row: ", rownum, ", ", .nms))
+  mutate(info = paste0("row: ", rownum, ", ", .nms),
+         rowname = .nms,
+         maha_dat   = rep_len(maha_dat,   .NN),
+         maha_shap  = rep_len(maha_shap,  .NN),
+         maha_color = rep_len(maha_color, .NN),
+         maha_alpha = rep_len(maha_alpha, .NN),
+         maha_shape = rep_len(maha_shape, .NN)
+  )
 beepr::beep(4)
 
 ## Combine X, Y and decode info for display
@@ -200,9 +222,12 @@ dat <- data.frame(1:nrow(dat_fld),
                   dat_fld)
 colnames(dat) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
                    "obs_wage_euro", "predicted_wage", "residual", colnames(dat_fld))
+## Top 2% by maha_data or maha_shap, the colored points
+inc_idx <- maha_dat > quantile(maha_dat, probs = .98) | maha_shap > quantile(maha_shap, probs = .98)
+DT_data <- dat[inc_idx, ] ## onoly the colored rows.
 ## EXPORT OBJECTS ----
 if(F){
-  save(dat, bound_spaces_df, file = "1preprocess.RData")
+  save(DT_data, bound_spaces_df, file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem_regression/data/1preprocess.RData", overwrite = TRUE)
   file.remove("./1preprocess.RData")
 }
@@ -211,24 +236,46 @@ if(F)
 
 ## Mock-up visual ------
 if(F){
-  require("ggplot2")
+  require("ggplot2"); require("plotly")
   tic("prep ggplot")
-  str(bound_spaces_df)
-  
-  g <- bound_spaces_df %>%
-    highlight_key(~rownum) %>% 
-    ggplot(hk, aes(V1, V2, rownum = rownum)) +
-    geom_point() +
-    facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
+  #str(bound_spaces_df)
+  ## grey and color pts
+  df <- bound_spaces_df
+  idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .98)
+  idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .98)
+  pts_idx <- idx_dat | idx_shap
+  grey_pts_idx <- !pts_idx
+  sum(pts_idx)/4
+  ## find txt pts
+  idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .999)
+  idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .999)
+  txt_pts_idx <- idx_dat | idx_shap
+  sum(txt_pts_idx)/4
+  ## Plot
+  g <- df[pts_idx, ] %>%
+    ## Plotly interaction key
+    plotly::highlight_key(~rownum) %>%
+    ggplot(aes(V1, V2)) +
+    ## Grey points
+    geom_point(aes(shape = maha_shape), data = df[grey_pts_idx, ], color = "grey") +
+    ## Density contours, .99, .5, .1, .01
+    geom_density2d(aes(V1, V2), df, color = "black",
+                   contour_var = "ndensity", breaks = c(.1, .5, .9, .99)) +
+    ## Color points
+    geom_point(aes(info = info, color = maha_cross,
+                   shape = maha_shape)) +
+    ## Text points
+    geom_text(aes(label = rowname), df[txt_pts_idx, ], color = "blue") +
+    facet_grid(rows = vars(obs_type), cols = vars(var_space), scales = "free") +
     theme_bw() +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank()) +
-    scale_color_discrete(name = "") + ## Manual legend title
-    scale_shape_discrete(name = "") ## Manual legend title
-  toc()
+    scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed", 
+                           type = "viridis") +
+    scale_shape_discrete(name = "")
   
-  ## BOX SELECT
-  ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+  ## BOX SELECT, FROM APP:
+  ggplotly(g, tooltip = "info") %>% ## Tooltip by name of var name/aes mapping arg.
     config(displayModeBar = FALSE) %>% ## Remove html buttons
     layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
     event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
