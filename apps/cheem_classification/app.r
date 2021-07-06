@@ -28,7 +28,7 @@ server <- function(input, output, session){
   output$selected_df <- DT::renderDT({ ## Original data of selection
     d <- event_data("plotly_selected")
     if (is.null(d)) return(NULL)
-    return(DT::datatable(raw_rmna[d$key, ], rownames = FALSE))
+    return(DT::datatable(dat_decode[d$key, ], rownames = FALSE))
   })
   
 } ### Close function, assigning server.

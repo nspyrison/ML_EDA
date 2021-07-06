@@ -131,20 +131,18 @@ if(F)
   load("./apps/cheem_regression/data/z_shap_df.RData")
 
 
-## mahalonobis dist?, then normalize ----
+## Normalized mahalonobis distances (median, covar) ----
 maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
   mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
-    matrix(ncol = 1) %>% #log() %>% 
+    matrix(ncol = 1) %>%
     scale_01() %>% 
     return
 }
 maha_dat  <- maha_vect_of(dat_fld)
 maha_shap <- maha_vect_of(shap_df)
 maha_delta  <- maha_shap - maha_dat
-summary(maha_delta) ## there are few negative values; 
+hist(maha_delta) ## there are fewer negative values; 
 ### fewer pts are further away in shap sp than data space
-### will these be under represented? i think so, may need to handle alpha differently.
-#maha_alpha <- .2 + .8 * scale_01(abs(maha_delta - median(maha_delta)))^2 ## distance from mediant of delta to balence fewer neg.
 maha_color <- maha_delta
 maha_shape <- factor(maha_delta >= 0, 
                      levels = c(FALSE, TRUE),

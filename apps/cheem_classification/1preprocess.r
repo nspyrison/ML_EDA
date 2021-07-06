@@ -34,54 +34,73 @@ dat <- spinifex::scale_sd(raw_rmna[, 3:6]) %>% as.data.frame()
 clas1 <- factor(raw_rmna$species, levels = lvls[1:2]) ## Manually remove 3rd lvl
 clas2 <- raw_rmna$sex
 if(F){
-  table(clas1) ## Unbalenced island obs
+  table(clas1) ## Unbalanced island obs
   table(clas2) ## Balanced sex
 }
 
-# ## Additional setup not used in local attribution matrix
-# new_obs_x <- rnorm_observation(xdat)
-
-# ## Encode classes {caret}
-# require("caret")
-# dv <- caret::dummyVars(" ~ .", data = raw_rmna)
-# encoding <- data.frame(predict(dv, raw_rmna))
-# detach("package:caret", unload = TRUE)
-# encoding <- encoding[, c(-7:-10, -13)]
-# str(encoding)
 
 ## Random forest model {randomForest} -----
 .p <- ncol(dat)
 .rf_mtry <- if(is.discrete(clas1)) sqrt(.p) else .p / 3L
 .lvls <- levels(clas1)
 tic("RF fit")
-for(i in 1:length(.lvls)){
-  test_i <- as.integer(clas1 == .lvls[i]) ## treeshap needs integer RF, not bool.
+#for(i in 1:length(.lvls)){
+i <- 1
+  test_i <- as.integer(clas1 == .lvls[i])
+  assign(x = paste0("test", i), test_i)
   assign(x = paste0(".rf", i),
          randomForest::randomForest(test_i~.,
                                     data = data.frame(test_i, dat),
                                     mtry = .rf_mtry),
          envir = globalenv()
   )
-}
-toc()
+#}
+toc() ## .22 sec
+pred <- resid <- resid_bool <- NULL
+#for(i in 1:length(.lvls)){
+i <- 1
+  this_rf <- get(paste0(".rf", i))
+  this_pred <- predict(this_rf, newdata = dat) ## newdata is only Xs
+  this_resid <- as.integer(clas1 == .lvls[i]) - this_pred
+  this_resid_bool <- abs(this_resid) >= .5
+  pred       <- c(pred, this_pred)
+  resid      <- c(resid, this_resid)
+  resid_bool <- c(resid_bool, this_resid_bool)
+#}
 
 
 ## shap_df {treeshap} ------
 gc()
 tic("treeshap")
-for(i in 1:length(.lvls)){
-  .sub <- dat[clas1 == .lvls[i], ]
+#for(i in 1:length(.lvls)){
+  #.sub <- dat[clas1 == .lvls[i], ]
   .rf <- get(paste0('.rf', i))
   assign(paste0("treeshap", i),
-         treeshap_df(.rf, .sub),
+         treeshap_df(.rf, dat),
          envir = globalenv())
-}
-shap_df <- rbind(treeshap1, treeshap2)
+#}
+shap_df <- treeshap1 #rbind(treeshap1, treeshap2)
 attr(shap_df, "data") <- dat
-toc()
+toc() ## 1.3 sec
 
-## Create spaces! ------
 
+## Normalized mahalonobis distances (median, covar) ----
+maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
+  mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
+    matrix(ncol = 1) %>%
+    scale_01() %>% 
+    return
+}
+maha_dat   <- maha_vect_of(dat)
+maha_shap  <- maha_vect_of(shap_df)
+maha_delta <- maha_shap - maha_dat
+hist(maha_delta) ## Not as right skewed as the regression; artifact of wages?
+maha_color <- maha_delta
+maha_shape <- factor(maha_delta >= 0,
+                     levels = c(FALSE, TRUE),
+                     labels = c("maha SHAP larger, ", "maha data larger"))
+
+## Create variable spaces! ------
 
 ### nMDS
 .n <- nrow(dat)
@@ -91,7 +110,7 @@ nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "nMDS")
 
 ### PCA
-pca_dat  <- as.matrix(dat) %*% spinifex::basis_pca(dat) %>%
+pca_dat <- as.matrix(dat) %*% spinifex::basis_pca(dat) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA")
 pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA")
@@ -102,16 +121,47 @@ olda_dat  <- as.matrix(dat) %*% spinifex::basis_olda(dat, clas1) %>%
 olda_shap <- as.matrix(shap_df) %*% spinifex::basis_olda(shap_df, clas1) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "oLD")
 
-### Combine
-names(nmds_dat) <- names(nmds_shap) <- names(pca_dat) <- names(pca_shap) <-
-  names(olda_dat) <- names(olda_shap) <- c(paste0("V", 1:2), "rownum", "data", "space")
-bound_spaces_df <- rbind(nmds_dat, nmds_shap, pca_dat, pca_shap, olda_dat, olda_shap)
+### maha cross
+bnmds_dat  <- cbind(nmds_dat,  maha_shap)
+bnmds_shap <- cbind(nmds_shap, maha_dat)
+bpca_dat   <- cbind(pca_dat,   maha_shap)
+bpca_shap  <- cbind(pca_shap,  maha_dat)
+bolda_dat  <- cbind(olda_dat,  maha_shap)
+bolda_shap <- cbind(olda_shap, maha_dat)
+## combine
+names(bnmds_dat) <- names(bnmds_shap) <- names(bpca_dat) <- names(bpca_shap) <-
+  names(bolda_dat) <- names(bolda_shap) <- c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross")
+bound_spaces_df <- rbind(bnmds_dat,
+                         bnmds_shap,
+                         bpca_dat,
+                         bpca_shap,
+                         bolda_dat,
+                         bolda_shap)
 beepr::beep(4)
+## Add replicated classes
+.nn <- nrow(bound_spaces_df)
+bound_spaces_df$species    <- rep_len(clas1, .nn)
+bound_spaces_df$sex        <- rep_len(clas2, .nn)
+bound_spaces_df$maha_color <- rep_len(maha_color, .nn)
+
+## reconstruct dat with features
+dat_decode <- data.frame(1:nrow(dat),
+                         maha_dat,
+                         maha_shap,
+                         clas1,
+                         test1,
+                         round(pred, 2),
+                         round(resid, 2),
+                         resid_bool,
+                         clas2, 
+                         dat)
+colnames(dat_decode) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
+                   "obs_species", "predicted_species_is1", "residual", 
+                   "residual_boolean", "sex", colnames(dat))
 
 ## EXPORT OBJECTS ----
 if(F){
-  save(raw_rmna,
-       clas1, clas2,
+  save(dat_decode,
        bound_spaces_df,
        file = "1preprocess.RData")
   file.copy("./1preprocess.RData", to = "./apps/cheem_classification/data/1preprocess.RData", overwrite = TRUE)
@@ -123,26 +173,29 @@ if(F)
 
 if(F){
   ## Mock-up visual ------
-  ## Call in app or local with:
-  ## Click select
   require("ggplot2")
   tic("prep ggplot ")
   str(bound_spaces_df)
-  .nn <- nrow(bound_spaces_df)
-  species <- rep_len(clas1, .nn)
-  sex <- rep_len(clas2, .nn)
   
-  hk <- bound_spaces_df %>%
-    highlight_key(~rownum)
-  g <- ggplot(hk, aes(V1, V2, rownum = rownum,
-                      color = species, shape = sex)) +
+  g <- bound_spaces_df %>%
+    highlight_key(~rownum) %>% 
+    ggplot(aes(V1, V2, rownum = rownum,
+               color = maha_color, shape = species)) +
+               #color = species, shape = sex)) +
     geom_point() +
-    facet_grid(rows = vars(data), cols = vars(space)) +
+    # ## Density contours, .99, .5, .1, .01
+    # geom_density2d(aes(V1, V2), color = "black",
+    #                contour_var = "ndensity", breaks = c(.1, .5, .9)) +
+    facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
     theme_bw() +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank()) +
-    scale_color_discrete(name = "") + ## Manual legend title
-    scale_shape_discrete(name = "") ## Manual legend title
+    scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
+                         low = "blue",
+                         mid = "grey",
+                         high = "red"
+    )
+    
   
   ## BOX SELECT
   ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.

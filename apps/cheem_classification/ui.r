@@ -16,22 +16,27 @@ require("DT") ## For html table and buttons
 load("./data/1preprocess.RData")
 ## Loads the following objects: 
 # dat, clas1, clas2, shap_df, dist_dat, dist_shap, bound_spaces_df,
-## Initialize
-.nn <- nrow(bound_spaces_df)
-species <- rep_len(clas1, .nn)
-sex <- rep_len(clas2, .nn)
 
-hk <- bound_spaces_df %>%
-  highlight_key(~rownum)
-g <- ggplot(hk, aes(V1, V2, rownum = rownum,
-                    color = species, shape = sex)) +
+
+## Initialize ggplot
+g <- bound_spaces_df %>%
+  highlight_key(~rownum) %>% 
+  ggplot(aes(V1, V2, rownum = rownum,
+             color = maha_color, shape = species)) +
+  #color = species, shape = sex)) +
   geom_point() +
-  facet_grid(rows = vars(data), cols = vars(space)) +
+  # ## Density contours, .99, .5, .1, .01
+  # geom_density2d(aes(V1, V2), color = "black",
+  #                contour_var = "ndensity", breaks = c(.1, .5, .9)) +
+  facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
   theme_bw() +
   theme(axis.text  = element_blank(),
         axis.ticks = element_blank()) +
-  scale_color_discrete(name = "") + ## Manual legend title
-  scale_shape_discrete(name = "") ## Manual legend title
+  scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
+                        low = "blue",
+                        mid = "grey",
+                        high = "red"
+  )
 
 
 if(F){ ## Not run, source/open local function files relative to proj
@@ -50,10 +55,11 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
   fluidRow(
     column(width = 4L,
            p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
-           p("1) For each species (level of class 1), create a RF model predicting that species."),
-           p("2) For each species model, extract SHAP values of EACH observation, bind for a full [n*p] set."),
-           p("3) Create nMDS-, PCA-, and oLDA- spaces for the orginal and shap values, format together"),
-           p("- Load above objects into shiny app; wait time is shiny/ggplot2/GGally/plotly."),
+           p("1) Remove NAs rows, remove most distant species."),
+           p("2) Create a RF model predicting between remaining species."),
+           p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
+           p("4) Create nMDS-, PCA-, and oLDA-, and maha spaces for the orginal and shap values"),
+           p("- Load above objects into shiny app; Explore SHAP sensivity with ggplot2/plotly."),
     ),
     column(width = 8L,
      
@@ -62,8 +68,10 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
   ## main output row ----
   fluidRow(
     shiny::hr(),
-    h3("Palmer penguins, color by species, shape by sex"),
-    p("Drag to select points, double click to remove the selection."),
+    h3("Palmer penguins"),
+    p("Color by the difference of the mahalonobis distances, shap - data"),
+    p("Shape is the species of the penguin, the membership was the target variable of the model"),
+    p("Click or click and drag to select points, double click to remove the selection."),
     plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
       shinycssloaders::withSpinner(type = 8L),
     shiny::hr(),
