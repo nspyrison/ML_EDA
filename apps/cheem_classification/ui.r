@@ -12,42 +12,48 @@ require("shiny")
 require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 require("DT") ## For html table and buttons
-## Load objs
-load("./data/1preprocess.RData")
-## Loads the following objects: 
-# dat, clas1, clas2, shap_df, dist_dat, dist_shap, bound_spaces_df,
-
-
-## Initialize ggplot
-g <- bound_spaces_df %>%
-  highlight_key(~rownum) %>% 
-  ggplot(aes(V1, V2, rownum = rownum,
-             color = maha_color, shape = species)) +
-  #color = species, shape = sex)) +
-  geom_point() +
-  # ## Density contours, .99, .5, .1, .01
-  # geom_density2d(aes(V1, V2), color = "black",
-  #                contour_var = "ndensity", breaks = c(.1, .5, .9)) +
-  facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
-  theme_bw() +
-  theme(axis.text  = element_blank(),
-        axis.ticks = element_blank()) +
-  scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
-                        low = "blue",
-                        mid = "grey",
-                        high = "red"
-  )
-
-
 if(F){ ## Not run, source/open local function files relative to proj
   source("./apps/cheem_classification/trees_of_cheem.r")
-  source("./apps/cheem_classification/spinifex_ggproto.r")
-  load("./apps/cheem_classification/data/1preprocess.RData")
+  load("./apps/cheem_classification/data/1preprocess_rf_treeshap.RData")
+  load("./apps/cheem_classification/data/2preprocess_rf_dalex.RData")
+  load("./apps/cheem_classification/data/3preprocess_svm_dalex.RData")
   ##
   file.edit("./apps/cheem_classification/trees_of_cheem.r")
-  file.edit("./apps/cheem_classification/spinifex_ggproto.r")
-  file.edit("./apps/cheem_classification/1preprocess.r")
+  file.edit("./apps/cheem_classification/1preprocess_rf_treeshap.r")
+  file.edit("./apps/cheem_classification/2preprocess_rf_dalex.r")
+  file.edit("./apps/cheem_classification/3preprocess_svm_dalex.r")
 }
+
+## EXPRESSION to make plot
+g_expr <- expression({
+  bound_spaces_df %>%
+    highlight_key(~rownum) %>%
+    ggplot(aes(V1, V2, rownum = rownum,
+               color = maha_color, shape = species)) +
+    #color = species, shape = sex)) +
+    geom_point() +
+    # ## Density contours, .99, .5, .1, .01
+    # geom_density2d(aes(V1, V2), color = "black",
+    #                contour_var = "ndensity", breaks = c(.1, .5, .9)) +
+    facet_grid(rows = vars(obs_type), cols = vars(var_space)) +
+    theme_bw() +
+    theme(axis.text  = element_blank(),
+          axis.ticks = element_blank()) +
+    scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
+                          low = "blue",
+                          mid = "grey",
+                          high = "red"
+    )
+})
+
+## Load  -----
+load("./data/1preprocess_rf_treeshap.RData") ## objs: dat_decode, bound_spaces_df
+g_rf_treeshap <- eval(g_expr)
+load("./data/2preprocess_rf_dalex.RData")
+g_rf_dalex <- eval(g_expr)
+load("./data/3preprocess_svm_dalex.RData")
+g_svm_dalex <- eval(g_expr) 
+
 
 ##### tab1_cheem ----
 tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", fluidPage(
@@ -72,9 +78,13 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
     p("Color by the difference of the mahalonobis distances, shap - data"),
     p("Shape is the species of the penguin, the membership was the target variable of the model"),
     p("Click or click and drag to select points, double click to remove the selection."),
+    selectInput("model_shap_type", label = "Model and shap to use:",
+                choices = c("1) Random forest, {treeshap}" = "rf_treeshap",
+                            "2) Random forest, {DALEX} shap" = "rf_dalex",
+                            "3) SVM (radial), {DALEX} shap" = "svm_dalex")),
     plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
       shinycssloaders::withSpinner(type = 8L),
-    shiny::hr(),
+    hr(),
     h4("Selected data:"),
     verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
     DT::DTOutput("selected_df")

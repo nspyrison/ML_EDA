@@ -44,42 +44,29 @@ if(F){
 .rf_mtry <- if(is.discrete(clas1)) sqrt(.p) else .p / 3L
 .lvls <- levels(clas1)
 tic("RF fit")
-#for(i in 1:length(.lvls)){
 i <- 1
-  test_i <- as.integer(clas1 == .lvls[i])
-  assign(x = paste0("test", i), test_i)
-  assign(x = paste0(".rf", i),
-         randomForest::randomForest(test_i~.,
-                                    data = data.frame(test_i, dat),
-                                    mtry = .rf_mtry),
-         envir = globalenv()
-  )
-#}
+test1 <- as.integer(clas1 == .lvls[i])
+assign(x = paste0("test", i), test_i)
+assign(x = paste0(".rf", i),
+       randomForest::randomForest(test1~.,
+                                  data = data.frame(test1, dat),
+                                  mtry = .rf_mtry),
+       envir = globalenv()
+)
 toc() ## .22 sec
-pred <- resid <- resid_bool <- NULL
-#for(i in 1:length(.lvls)){
-i <- 1
-  this_rf <- get(paste0(".rf", i))
-  this_pred <- predict(this_rf, newdata = dat) ## newdata is only Xs
-  this_resid <- as.integer(clas1 == .lvls[i]) - this_pred
-  this_resid_bool <- abs(this_resid) >= .5
-  pred       <- c(pred, this_pred)
-  resid      <- c(resid, this_resid)
-  resid_bool <- c(resid_bool, this_resid_bool)
-#}
+pred <- predict(rf1, newdata = dat) ## newdata is only Xs
+pred_clas <- .lvls[2 - as.integer(abs(pred) >= .5)]
+resid <- as.integer(clas1 == .lvls[i]) - pred
 
 
 ## shap_df {treeshap} ------
 gc()
 tic("treeshap")
-#for(i in 1:length(.lvls)){
-  #.sub <- dat[clas1 == .lvls[i], ]
-  .rf <- get(paste0('.rf', i))
-  assign(paste0("treeshap", i),
-         treeshap_df(.rf, dat),
-         envir = globalenv())
-#}
-shap_df <- treeshap1 #rbind(treeshap1, treeshap2)
+.rf <- get(paste0('.rf', i))
+assign(paste0("treeshap", i),
+       treeshap_df(.rf, dat),
+       envir = globalenv())
+shap_df <- treeshap1
 attr(shap_df, "data") <- dat
 toc() ## 1.3 sec
 
@@ -146,29 +133,28 @@ bound_spaces_df$maha_color <- rep_len(maha_color, .nn)
 
 ## reconstruct dat with features
 dat_decode <- data.frame(1:nrow(dat),
-                         maha_dat,
-                         maha_shap,
+                         round(maha_dat, 2),
+                         round(maha_shap, 2),
                          clas1,
-                         test1,
+                         pred_clas,
                          round(pred, 2),
                          round(resid, 2),
-                         resid_bool,
                          clas2, 
-                         dat)
+                         round(dat, 2))
 colnames(dat_decode) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
-                   "obs_species", "predicted_species_is1", "residual", 
-                   "residual_boolean", "sex", colnames(dat))
+                          "obs_species", "pred_species", "prediction",
+                          "residual", "sex", colnames(dat))
 
 ## EXPORT OBJECTS ----
 if(F){
   save(dat_decode,
        bound_spaces_df,
-       file = "1preprocess.RData")
-  file.copy("./1preprocess.RData", to = "./apps/cheem_classification/data/1preprocess.RData", overwrite = TRUE)
-  file.remove("./1preprocess.RData")
+       file = "1preprocess_rf_treeshap.RData")
+  file.copy("./1preprocess_rf_treeshap.RData", to = "./apps/cheem_classification/data/1preprocess_rf_treeshap.RData", overwrite = TRUE)
+  file.remove("./1preprocess_rf_treeshap.RData")
 }
 if(F)
-  load("./apps/cheem_classification/data/1preprocess.RData")
+  load("./apps/cheem_classification/data/1preprocess_rf_treeshap.RData")
 
 
 if(F){

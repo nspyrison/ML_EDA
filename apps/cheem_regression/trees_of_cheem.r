@@ -60,32 +60,25 @@ print.treeshap_df <- function (x, ...){
 ## Local attribution df from DALEX
 local_attribution_df <- function(
   data, target_var,
+  model = randomForest::randomForest(
+    x    = target_var~.,
+    data = data.frame(target_var, data),
+    mtry = if(plyr::is.discrete(tgt_var)) sqrt(ncol(data)) else ncol(data) / 3L),
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
-  do_normalize_rows = TRUE,
-  n_cores = parallel::detectCores() - 1,
   ...){
   ## Assumptions
-  requireNamespace("doParallel")
-  is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
-    is.factor(x) || is.character(x) || is.logical(x)
   data <- as.data.frame(data)
-  
-  ## Initialize
   parts_type <- match.arg(parts_type)
+  ## Initialize
   .p <- ncol(data)
   .n <- nrow(data)
   
-  if(is.discrete(target_var) & length(unique(target_var)) > 2L)
+  if(plyr::is.discrete(target_var) & length(unique(target_var)) > 2L)
     stop("Not expecting multiclass discrete target variable, try looping over target variable testing against each level.")
-  .RF_mtry <- if(is.discrete(tgt_var)) sqrt(.p) else .p / 3L
-  #### Random forest, of hold one out data
-  .rf <- randomForest::randomForest(target_var~.,
-                                    data = data.frame(target_var, data),
-                                    mtry = .RF_mtry)
   #### DALEX::predict_parts, (of DALEX::explain()) of that Random forest
-  .ex_rf <- DALEX::explain(model = .rf,
+  .ex <- DALEX::explain(model = model,
                            data = data,
                            y = target_var,
                            label = paste0(parts_type, " local attribution of random forest model"))
@@ -94,7 +87,7 @@ local_attribution_df <- function(
   ret <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
   ##for each row num -----
   sapply(1L:nrow(data), function(i){
-    .parts <- DALEX::predict_parts(explainer = .ex_rf,
+    .parts <- DALEX::predict_parts(explainer = .ex,
                                    new_observation =  data[i,, drop = FALSE],
                                    type = parts_type,
                                    N = parts_N,

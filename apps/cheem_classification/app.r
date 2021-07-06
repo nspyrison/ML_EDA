@@ -10,6 +10,7 @@ server <- function(input, output, session){
   ### main plot -----
   
   output$main_plot <- plotly::renderPlotly({
+    g <- get(paste0("g_", input$model_shap_type))
     ## BOX SELECT
     ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
       config(displayModeBar = FALSE) %>% ## Remove html buttons

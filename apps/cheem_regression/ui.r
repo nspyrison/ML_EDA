@@ -32,14 +32,14 @@ if(F){ ## Not run, source/open local function files relative to proj
 ## Prep gg plot -----
 ## grey and color pts
 df <- bound_spaces_df
-idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .98)
-idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .98)
+idx_dat  <- df$maha_dat  > quantile(df$maha_dat, probs = .98)
+idx_shap <- df$maha_shap > quantile(df$maha_shap, probs = .98)
 pts_idx <- idx_dat | idx_shap
 grey_pts_idx <- !pts_idx
 sum(pts_idx)/4
 ## find txt pts
-idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .999)
-idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .999)
+idx_dat  <- df$maha_dat  > quantile(df$maha_dat, probs = .999)
+idx_shap <- df$maha_shap > quantile(df$maha_shap, probs = .999)
 txt_pts_idx <- idx_dat | idx_shap
 sum(txt_pts_idx)/4
 ## Plot
@@ -53,7 +53,7 @@ g <- df[pts_idx, ] %>%
   geom_density2d(aes(V1, V2), df, color = "black",
                  contour_var = "ndensity", breaks = c(.1, .5, .9, .99)) +
   ## Color points
-  geom_point(aes(info = info, color = maha_cross,
+  geom_point(aes(info = info, color = maha_color,
                  shape = maha_shape)) +
   ## Text points
   geom_text(aes(label = rowname), df[txt_pts_idx, ], color = "blue") +
@@ -61,8 +61,10 @@ g <- df[pts_idx, ] %>%
   theme_bw() +
   theme(axis.text  = element_blank(),
         axis.ticks = element_blank()) +
-  scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed", 
-                         type = "viridis") +
+  scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
+                        low = "blue", mid = "grey", high = "red") +
+  # scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed", 
+  #                        type = "viridis") +
   scale_shape_discrete(name = "")
 
 

@@ -120,7 +120,7 @@ gc();Sys.time()
 shap_df <- rbind(shap_df1, shap_df2, shap_df3, shap_df4)
 attr(shap_df, "data") <- dat_fld ## Similarly append data
 toc() ## ~900sec, 15 min
-beepr::beep(4)
+beepr::beep(4L)
 if(F){
   save(shap_df, file = "z_shap_df.RData") ## Single obj: .rf, shap_df, 
   file.copy("./z_shap_df.RData", to = "./apps/cheem_regression/data/z_shap_df.RData", overwrite = TRUE)
@@ -140,12 +140,12 @@ maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
 }
 maha_dat  <- maha_vect_of(dat_fld)
 maha_shap <- maha_vect_of(shap_df)
-maha_delta  <- maha_shap - maha_dat
+maha_delta <- maha_shap - maha_dat
 hist(maha_delta) ## there are fewer negative values; 
 ### fewer pts are further away in shap sp than data space
-maha_color <- maha_delta
-maha_shape <- factor(maha_delta >= 0, 
-                     levels = c(FALSE, TRUE),
+maha_color <- maha_delta + median(maha_delta)
+maha_shape <- factor(maha_delta >= 0,
+                     levels = c(TRUE, FALSE),
                      labels = c("maha SHAP larger, ", "maha data larger"))
 
 ## DOES REMOVING 90% lowest maha_dat remove the correct points!?
@@ -222,7 +222,7 @@ colnames(dat) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
                    "obs_wage_euro", "predicted_wage", "residual", colnames(dat_fld))
 ## Top 2% by maha_data or maha_shap, the colored points
 inc_idx <- maha_dat > quantile(maha_dat, probs = .98) | maha_shap > quantile(maha_shap, probs = .98)
-DT_data <- dat[inc_idx, ] ## onoly the colored rows.
+DT_data <- dat[inc_idx, ] ## Only the colored rows.
 ## EXPORT OBJECTS ----
 if(F){
   save(DT_data, bound_spaces_df, file = "1preprocess.RData")
@@ -239,13 +239,13 @@ if(F){
   #str(bound_spaces_df)
   ## grey and color pts
   df <- bound_spaces_df
-  idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .98)
+  idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat,  probs = .98)
   idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .98)
   pts_idx <- idx_dat | idx_shap
   grey_pts_idx <- !pts_idx
   sum(pts_idx)/4
   ## find txt pts
-  idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat, probs = .999)
+  idx_dat  <- bound_spaces_df$maha_dat  > quantile(bound_spaces_df$maha_dat,  probs = .999)
   idx_shap <- bound_spaces_df$maha_shap > quantile(bound_spaces_df$maha_shap, probs = .999)
   txt_pts_idx <- idx_dat | idx_shap
   sum(txt_pts_idx)/4
@@ -260,7 +260,7 @@ if(F){
     geom_density2d(aes(V1, V2), df, color = "black",
                    contour_var = "ndensity", breaks = c(.1, .5, .9, .99)) +
     ## Color points
-    geom_point(aes(info = info, color = maha_cross,
+    geom_point(aes(info = info, color = maha_color,
                    shape = maha_shape)) +
     ## Text points
     geom_text(aes(label = rowname), df[txt_pts_idx, ], color = "blue") +
@@ -268,8 +268,10 @@ if(F){
     theme_bw() +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank()) +
-    scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed", 
-                           type = "viridis") +
+    scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
+                          low = "blue", mid = "grey", high = "red") +
+    # scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed",
+    #                        type = "viridis") +
     scale_shape_discrete(name = "")
   
   ## BOX SELECT, FROM APP:
