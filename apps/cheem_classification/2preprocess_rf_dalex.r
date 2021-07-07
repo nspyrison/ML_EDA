@@ -74,7 +74,7 @@ hist(maha_delta) ## Not as right skewed as the regression; artifact of wages?
 maha_color <- maha_delta
 maha_shape <- factor(maha_delta >= 0,
                      levels = c(FALSE, TRUE),
-                     labels = c("maha SHAP larger, ", "maha data larger"))
+                     labels = c("maha SHAP larger", "maha data larger"))
 
 ## Create variable spaces! ------
 
@@ -118,7 +118,9 @@ beepr::beep(4)
 .nn <- nrow(bound_spaces_df)
 bound_spaces_df$species    <- rep_len(clas1, .nn)
 bound_spaces_df$sex        <- rep_len(clas2, .nn)
-bound_spaces_df$maha_color <- rep_len(maha_color, .nn)
+bound_spaces_df$maha_delta <- rep_len(maha_delta, .nn)
+bound_spaces_df$residual   <- rep_len(resid, .nn)
+
 
 ## reconstruct dat with features
 dat_decode <- data.frame(1:nrow(dat),
@@ -155,7 +157,7 @@ if(F){
   g <- bound_spaces_df %>%
     highlight_key(~rownum) %>% 
     ggplot(aes(V1, V2, rownum = rownum,
-               color = maha_color, shape = species)) +
+               color = maha_delta, shape = species)) +
                #color = species, shape = sex)) +
     geom_point() +
     # ## Density contours, .99, .5, .1, .01

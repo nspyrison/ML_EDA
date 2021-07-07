@@ -23,9 +23,7 @@ if(F)
   load("./apps/cheem_regression/data/1preprocess.RData")
 if(F){ ## Not run, source/open local function files relative to proj
   source("./apps/cheem_regression/trees_of_cheem.r")
-  source("./apps/cheem_regression/spinifex_ggproto.r")
   file.edit("./apps/cheem_regression/trees_of_cheem.r")
-  file.edit("./apps/cheem_regression/spinifex_ggproto.r")
   file.edit("./apps/cheem_regression/1preprocess.r")
 }
 

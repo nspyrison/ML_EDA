@@ -38,21 +38,16 @@ if(F){
   table(clas2) ## Balanced sex
 }
 
-
 ## Random forest model {randomForest} -----
 .p <- ncol(dat)
 .rf_mtry <- if(is.discrete(clas1)) sqrt(.p) else .p / 3L
 .lvls <- levels(clas1)
-tic("RF fit")
 i <- 1
+tic("RF fit")
 test1 <- as.integer(clas1 == .lvls[i])
-assign(x = paste0("test", i), test_i)
-assign(x = paste0(".rf", i),
-       randomForest::randomForest(test1~.,
-                                  data = data.frame(test1, dat),
-                                  mtry = .rf_mtry),
-       envir = globalenv()
-)
+.rf1 <- randomForest::randomForest(test1~.,
+                                   data = data.frame(test1, dat),
+                                   mtry = .rf_mtry)
 toc() ## .22 sec
 pred <- predict(rf1, newdata = dat) ## newdata is only Xs
 pred_clas <- .lvls[2 - as.integer(abs(pred) >= .5)]
@@ -62,11 +57,7 @@ resid <- as.integer(clas1 == .lvls[i]) - pred
 ## shap_df {treeshap} ------
 gc()
 tic("treeshap")
-.rf <- get(paste0('.rf', i))
-assign(paste0("treeshap", i),
-       treeshap_df(.rf, dat),
-       envir = globalenv())
-shap_df <- treeshap1
+shap_df <- treeshap_df(.rf, dat)
 attr(shap_df, "data") <- dat
 toc() ## 1.3 sec
 
@@ -85,10 +76,9 @@ hist(maha_delta) ## Not as right skewed as the regression; artifact of wages?
 maha_color <- maha_delta
 maha_shape <- factor(maha_delta >= 0,
                      levels = c(FALSE, TRUE),
-                     labels = c("maha SHAP larger, ", "maha data larger"))
+                     labels = c("maha SHAP larger", "maha data larger"))
 
 ## Create variable spaces! ------
-
 ### nMDS
 .n <- nrow(dat)
 nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat))$points) %>%
@@ -129,7 +119,8 @@ beepr::beep(4)
 .nn <- nrow(bound_spaces_df)
 bound_spaces_df$species    <- rep_len(clas1, .nn)
 bound_spaces_df$sex        <- rep_len(clas2, .nn)
-bound_spaces_df$maha_color <- rep_len(maha_color, .nn)
+bound_spaces_df$maha_delta <- rep_len(maha_delta, .nn)
+bound_spaces_df$residual   <- rep_len(resid, .nn)
 
 ## reconstruct dat with features
 dat_decode <- data.frame(1:nrow(dat),
@@ -139,7 +130,7 @@ dat_decode <- data.frame(1:nrow(dat),
                          pred_clas,
                          round(pred, 2),
                          round(resid, 2),
-                         clas2, 
+                         clas2,
                          round(dat, 2))
 colnames(dat_decode) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
                           "obs_species", "pred_species", "prediction",
@@ -166,7 +157,7 @@ if(F){
   g <- bound_spaces_df %>%
     highlight_key(~rownum) %>% 
     ggplot(aes(V1, V2, rownum = rownum,
-               color = maha_color, shape = species)) +
+               color = maha_delta, shape = species)) +
                #color = species, shape = sex)) +
     geom_point() +
     # ## Density contours, .99, .5, .1, .01
@@ -181,7 +172,6 @@ if(F){
                          mid = "grey",
                          high = "red"
     )
-    
   
   ## BOX SELECT
   ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
@@ -190,6 +180,8 @@ if(F){
     event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
     highlight(on = "plotly_selected", off = "plotly_deselect")
 }
+
+
 
 ## Other Selection options
 if(F){

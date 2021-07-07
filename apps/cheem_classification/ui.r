@@ -29,7 +29,7 @@ g_expr <- expression({
   bound_spaces_df %>%
     highlight_key(~rownum) %>%
     ggplot(aes(V1, V2, rownum = rownum,
-               color = maha_color, shape = species)) +
+               color = maha_delta, shape = species)) +
     #color = species, shape = sex)) +
     geom_point() +
     # ## Density contours, .99, .5, .1, .01

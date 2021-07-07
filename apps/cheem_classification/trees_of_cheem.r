@@ -45,10 +45,90 @@ print.treeshap_df <- function (x, ...){
 }
 
 
-# dist_mat <- as.matrix(dist(df_shap))
 
+#' @examples
+#' ## Discrete supervised classification RF
+#' dat <- spinifex::scale_sd(mtcars)
+#' tgt_var <- dat[, 1]
+#' xdat <- dat[, -1]
+#' 
+#' la_df <- local_attribution_df(data = xdat, target_var = tgt_var)
+#' GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
+## Local attribution df from DALEX
+local_attribution_df <- function(
+  data, target_var,
+  model = randomForest::randomForest(
+    x    = target_var~.,
+    data = data.frame(target_var, data),
+    mtry = if(plyr::is.discrete(tgt_var)) sqrt(ncol(data)) else ncol(data) / 3L),
+  parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
+  parts_B = 10,
+  parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
+  verbose = TRUE,
+  ...){
+  ## Assumptions
+  data <- as.data.frame(data)
+  parts_type <- match.arg(parts_type)
+  ## Initialize
+  .p <- ncol(data)
+  .n <- nrow(data)
+  
+  if(plyr::is.discrete(target_var) & length(unique(target_var)) > 2L)
+    stop("Not expecting multiclass discrete target variable, try looping over target variable testing against each level.")
+  ## Explanation of the model
+  .ex <- DALEX::explain(model = model, ## Has heavy model, needed for predict_parts.
+                        data = data,
+                        y = target_var,
+                        label = paste0(parts_type, " local attribution of random forest model"))
+  
+  ## predict the parts, iterating over each each observation
+  ret <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
+  r_seq <- round(seq(0, nrow(data), length.out = 11)[-1])
+  sapply(1L:nrow(data), function(i){
+    .parts <- DALEX::predict_parts(explainer = .ex,
+                                   new_observation =  data[i,, drop = FALSE],
+                                   type = parts_type,
+                                   N = parts_N,
+                                   B = parts_B,
+                                   ...)
+    attr(.parts, "yhats_distribution") <- NULL ## Reduces ~90% of the size, without hurting plot.predict_parts
+    #### The local attribution of those parts [1, p] vector in SHAP order.
+    ## Remade from: iBreakDown:::print.break_down_uncertainty
+    .df_la <- data.frame(
+      label = tapply(.parts$label, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+      variable_name = tapply(.parts$variable_name, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE),
+      variable_value = tapply(.parts$variable_value, paste(.parts$label, .parts$variable, sep = ": "), unique, na.rm = TRUE), ## oos variable value
+      median_local_attr = tapply(.parts$contribution, paste(.parts$label, .parts$variable, sep = ": "), median, na.rm = TRUE)
+    )
+    ## Reorder .df_la back to original data colname order
+    .row_idx <- order(match(.df_la$variable_name, colnames(data)))
+    .df_la   <- .df_la[.row_idx, ]
+    
+    ## Single obs of local attribution matrix
+    ret[i, ] <<- .df_la$median_local_attr
+    if(verbose == TRUE) ## if verbose, print message about every 10% of obs
+      if(i %in% r_seq) print(paste0("Completed ", i, " of ", nrow(data), " observations. (~ every 10%)."))
+  })
+  
+  ## Format
+  .rn <- rownames(data)
+  if(is.null(.rn) == TRUE) .rn <- 1L:.n
+  rownames(ret) <- paste0(parts_type, " of ", .rn)
+  colnames(ret) <- colnames(data)
+  ret <- as.data.frame(ret)
+  attr(ret, "class") <- c("local_attribution_df", "data.frame")
+  
+  ## Return full local attribution df.
+  return(ret)
+}
 
-
+create_grid <- function(x, n_pts = 20){
+  .x <- x[,1]
+  .y <- x[,1]
+  .xpts <- seq(min(.x), max(.x), length.out = n_pts)
+  .ypts <- seq(min(.y), max(.y), length.out = n_pts)
+  expand.grid(X1 = .xpts, X2 = .ypts)
+}
 
 
 
