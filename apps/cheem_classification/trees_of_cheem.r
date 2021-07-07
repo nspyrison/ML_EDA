@@ -27,7 +27,7 @@ rnorm_observation <- function(data){
 #'  df_shap <- treeshap_df(.rf, data = xdat)
 #' )[3]
 treeshap_df <- function(randomForest_model, data){
-  .rfu <- treeshap::randomForest.unify(.rf, data)
+  .rfu <- treeshap::randomForest.unify(randomForest_model, data)
   .tshap_ls <- treeshap::treeshap(.rfu, x = data) 
   .tshap_ls <- .tshap_ls[c(1,4)]
   ## Keeping only c(1,4); reduces ~98.5% of the obj size, keep shap values make data attr.
@@ -49,10 +49,11 @@ print.treeshap_df <- function (x, ...){
 #' @examples
 #' ## Discrete supervised classification RF
 #' dat <- spinifex::scale_sd(mtcars)
-#' tgt_var <- dat[, 1]
-#' xdat <- dat[, -1]
+#' y <- dat[, 1]
+#' x <- dat[, -1]
+#' mod <- randomForest::randomForest(mpg~., data = dat)
 #' 
-#' la_df <- local_attribution_df(data = xdat, target_var = tgt_var)
+#' la_df <- local_attribution_df(data = x, target_var = y, model = mod)
 #' GGally::ggpairs(as.data.frame(la_mat), mapping = aes(color = tgt_var))
 ## Local attribution df from DALEX
 local_attribution_df <- function(
@@ -116,10 +117,44 @@ local_attribution_df <- function(
   rownames(ret) <- paste0(parts_type, " of ", .rn)
   colnames(ret) <- colnames(data)
   ret <- as.data.frame(ret)
+  attr(ret, "data") <- data
   attr(ret, "class") <- c("local_attribution_df", "data.frame")
   
   ## Return full local attribution df.
   return(ret)
+}
+
+#' @examples
+#' ## Discrete supervised classification RF
+#' dat <- spinifex::scale_sd(mtcars)
+#' y <- dat[, 1]
+#' x <- dat[, -1]
+#' mod <- randomForest::randomForest(mpg~., data = dat)
+#' 
+#' la_df <- local_attribution_df(data = x, target_var = y, model = mod)
+#' feat_df <- feature_df(la_df, mod)
+feature_df <- function(local_attribution, model){ #, y = model$y, x = attr(local_attribution, "data")){ ## local_attr_df contains x
+  ## Normalized mahalonobis distances (median, covar) ----
+  maha_vect_of <- function(x, do_normalize = TRUE){ ## dist from in-class column median(x), cov(x)
+    maha <- mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
+      matrix(ncol = 1)
+      if(do_normalize) maha <- scale_01(maha) 
+      return(maha)
+  }
+  x <- attr(local_attribution, "data")
+  y <- model$y
+  
+  pred      <- predict(model, newdata = x)
+  maha_data <- maha_vect_of(x)
+  maha_shap <- maha_vect_of(local_attribution)
+  
+  data.frame(rownum = 1:nrow(local_attribution),
+             y = model$y,
+             prediction = pred,
+             residual = model$y - pred,
+             maha_shap = maha_shap,
+             maha_data = maha_data,
+             maha_delta = maha_shap - maha_data)
 }
 
 create_grid <- function(x, n_pts = 20){

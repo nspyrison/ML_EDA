@@ -13,11 +13,9 @@ require("caret") ## One hot encoding class.
 require("plotly") ## Linked brushing
 ## Local files
 source("./apps/cheem_classification/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
-source("./apps/cheem_classification/spinifex_ggproto.r") ## New spinifex ggproto_* api
-if(F){ ## Manually run to view file:
+if(F) ## Manually run to view file:
   file.edit("./apps/cheem_classification/trees_of_cheem.r")
-  file.edit("./apps/cheem_classification/spinifex_ggproto.r")
-}
+
 
 ## Setup ------
 ## Data setup, palmerpenguins::penguins
@@ -26,10 +24,6 @@ raw_rmna <- raw[!is.na(raw$sex), ]
 lvls <- levels(raw_rmna$species)
 ## Filter to closest 2 classes
 raw_rmna <- raw_rmna[raw_rmna$species %in% lvls[1:2], ]
-# ## Normalize each column by its ROW NORM?!, not applied yet
-# scale_row_norm <- function(data){
-#   return(t(apply(data, 1L, function(r){r / norm(matrix(r, nrow = 1))})))
-# }
 dat <- spinifex::scale_sd(raw_rmna[, 3:6]) %>% as.data.frame()
 clas1 <- factor(raw_rmna$species, levels = lvls[1:2]) ## Manually remove 3rd lvl
 clas2 <- raw_rmna$sex
@@ -45,7 +39,7 @@ if(F){
 i <- 1
 tic("RF fit")
 test1 <- as.integer(clas1 == .lvls[i])
-.rf1 <- randomForest::randomForest(test1~.,
+rf1 <- randomForest::randomForest(test1~.,
                                    data = data.frame(test1, dat),
                                    mtry = .rf_mtry)
 toc() ## .22 sec
@@ -57,17 +51,16 @@ resid <- as.integer(clas1 == .lvls[i]) - pred
 ## shap_df {treeshap} ------
 gc()
 tic("treeshap")
-shap_df <- treeshap_df(.rf, dat)
-attr(shap_df, "data") <- dat
+shap_df <- treeshap_df(rf1, dat)
 toc() ## 1.3 sec
 
 
 ## Normalized mahalonobis distances (median, covar) ----
-maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
-  mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
-    matrix(ncol = 1) %>%
-    scale_01() %>% 
-    return
+maha_vect_of <- function(x, do_normalize = TRUE){ ## dist from in-class column median(x), cov(x)
+  maha <- mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
+    matrix(ncol = 1)
+  if(do_normalize) maha <- spinifex::scale_01(maha) 
+  return(maha)
 }
 maha_dat   <- maha_vect_of(dat)
 maha_shap  <- maha_vect_of(shap_df)
@@ -108,10 +101,10 @@ bolda_shap <- cbind(olda_shap, maha_dat)
 ## combine
 names(bnmds_dat) <- names(bnmds_shap) <- names(bpca_dat) <- names(bpca_shap) <-
   names(bolda_dat) <- names(bolda_shap) <- c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross")
-bound_spaces_df <- rbind(bnmds_dat,
-                         bnmds_shap,
-                         bpca_dat,
-                         bpca_shap,
+bound_spaces_df <- rbind(#bnmds_dat,
+                         #bnmds_shap,
+                         #bpca_dat,
+                         #bpca_shap,
                          bolda_dat,
                          bolda_shap)
 beepr::beep(4)
@@ -136,10 +129,17 @@ colnames(dat_decode) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
                           "obs_species", "pred_species", "prediction",
                           "residual", "sex", colnames(dat))
 
+## qq df
+.n <- nrow(dat)
+bound_qq_df <- data.frame(y = c(maha_dat, maha_shap),
+                          type = c(rep("maha(data)", .n), rep("maha(shap)", .n)))
+
+
 ## EXPORT OBJECTS ----
 if(F){
   save(dat_decode,
        bound_spaces_df,
+       bound_qq_df,
        file = "1preprocess_rf_treeshap.RData")
   file.copy("./1preprocess_rf_treeshap.RData", to = "./apps/cheem_classification/data/1preprocess_rf_treeshap.RData", overwrite = TRUE)
   file.remove("./1preprocess_rf_treeshap.RData")
@@ -147,6 +147,19 @@ if(F){
 if(F)
   load("./apps/cheem_classification/data/1preprocess_rf_treeshap.RData")
 
+
+
+if(F){ ## QQ mockup
+  manual_color[order(bound_qq_df$maha_delta)] <- colorRampPalette(c("blue", "grey", "red"))(100)[
+    as.numeric(cut(bound_qq_df$maha_delta,breaks=100))]
+  ggplot(bound_qq_df, aes(sample = y^(1/2), )) + 
+    facet_grid(rows = vars(type)) + 
+    geom_qq(color = manual_color) + geom_qq_line() +
+    theme_bw() + 
+    labs(x = "theoretical", y = "Square root of observations", title = "Q-Q plots, (square root)") +
+    theme(axis.text  = element_blank(),
+          axis.ticks = element_blank())
+}
 
 if(F){
   ## Mock-up visual ------

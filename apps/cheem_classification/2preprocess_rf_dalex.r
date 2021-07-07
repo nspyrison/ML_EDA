@@ -107,10 +107,10 @@ bolda_shap <- cbind(olda_shap, maha_dat)
 ## combine
 names(bnmds_dat) <- names(bnmds_shap) <- names(bpca_dat) <- names(bpca_shap) <-
   names(bolda_dat) <- names(bolda_shap) <- c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross")
-bound_spaces_df <- rbind(bnmds_dat,
-                         bnmds_shap,
-                         bpca_dat,
-                         bpca_shap,
+bound_spaces_df <- rbind(#bnmds_dat,
+                         #bnmds_shap,
+                         #bpca_dat,
+                         #bpca_shap,
                          bolda_dat,
                          bolda_shap)
 beepr::beep(4)
@@ -136,10 +136,16 @@ colnames(dat_decode) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
                           "obs_species", "pred_species", "prediction",
                           "residual", "sex", colnames(dat))
 
+.n <- nrow(maha_dat)
+bound_qq_df <- data.frame(y = c(maha_dat, maha_shap),
+                          type = c(rep("maha(data)", .n), rep("maha(shap)", .n)))
+
+
 ## EXPORT OBJECTS ----
 if(F){
   save(dat_decode,
        bound_spaces_df,
+       bound_qq_df,
        file = "2preprocess_rf_dalex.RData")
   file.copy("./2preprocess_rf_dalex.RData", to = "./apps/cheem_classification/data/2preprocess_rf_dalex.RData", overwrite = TRUE)
   file.remove("./2preprocess_rf_dalex.RData")
@@ -147,6 +153,16 @@ if(F){
 if(F)
   load("./apps/cheem_classification/data/2preprocess_rf_dalex.RData")
 
+
+if(F){ ## QQ mockup
+  ggplot(bound_qq_df, aes(sample = y^(1/2))) + 
+    facet_grid(rows = vars(type)) + 
+    geom_qq() + geom_qq_line() +
+    theme_bw() + 
+    labs(x = "theoretical", y = "Square root of observations", title = "Q-Q plots, (square root)") +
+    theme(axis.text  = element_blank(),
+          axis.ticks = element_blank())
+}
 
 if(F){
   ## Mock-up visual ------

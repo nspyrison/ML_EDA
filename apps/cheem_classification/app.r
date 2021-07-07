@@ -18,6 +18,10 @@ server <- function(input, output, session){
       event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
       highlight(on = "plotly_selected", off = "plotly_deselect")
   }) ## Loaded in UI.
+  output$qq_plot <- shiny::renderPlot({
+    qq <- get(paste0("qq_", input$model_shap_type))
+    qq
+  }) ## Loaded in UI.
   
   ## Selection data lookup ------
   ## What ggplotly sees

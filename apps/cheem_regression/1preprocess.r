@@ -122,7 +122,7 @@ attr(shap_df, "data") <- dat_fld ## Similarly append data
 toc() ## ~900sec, 15 min
 beepr::beep(4L)
 if(F){
-  save(shap_df, file = "z_shap_df.RData") ## Single obj: .rf, shap_df, 
+  save(shap_df, file = "z_shap_df.RData") ## Obj: shap_df
   file.copy("./z_shap_df.RData", to = "./apps/cheem_regression/data/z_shap_df.RData", overwrite = TRUE)
   file.remove("./z_shap_df.RData")
   rm(list = c(paste0("shap_df", 1L:4L), paste0("dat_", 1L:4L)))

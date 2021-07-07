@@ -40,19 +40,33 @@ g_expr <- expression({
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank()) +
     scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
-                          low = "blue",
-                          mid = "grey",
-                          high = "red"
-    )
+                          low = "blue",mid = "grey",high = "red")
+})
+## EXPRESSION to make qq plo
+qq_expr <- expression({
+  # manual_color <- colorRampPalette(c("blue", "grey", "red"))(100)[
+  #   as.numeric(cut(bound_qq_df$maha_delta,breaks=100))]
+  ggplot(bound_qq_df, aes(sample = y^(1/2))) + 
+    facet_grid(rows = vars(type)) + 
+    stat_qq() + stat_qq_line() +
+    theme_bw() + 
+    labs(x = "theoretical", y = "Square root of observations", title = "Q-Q plots, (square root)") +
+    # scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
+    #                       low = "blue",mid = "grey",high = "red") +
+    theme(axis.text  = element_blank(),
+          axis.ticks = element_blank())
 })
 
 ## Load  -----
 load("./data/1preprocess_rf_treeshap.RData") ## objs: dat_decode, bound_spaces_df
-g_rf_treeshap <- eval(g_expr)
+g_rf_treeshap  <- eval(g_expr)
+qq_rf_treeshap <- eval(qq_expr)
 load("./data/2preprocess_rf_dalex.RData")
-g_rf_dalex <- eval(g_expr)
+g_rf_dalex  <- eval(g_expr)
+qq_rf_dalex <- eval(qq_expr)
 load("./data/3preprocess_svm_dalex.RData")
-g_svm_dalex <- eval(g_expr) 
+g_svm_dalex  <- eval(g_expr) 
+qq_svm_dalex <- eval(qq_expr)
 
 
 ##### tab1_cheem ----
@@ -82,8 +96,16 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
                 choices = c("1) Random forest, {treeshap}" = "rf_treeshap",
                             "2) Random forest, {DALEX} shap" = "rf_dalex",
                             "3) SVM (radial), {DALEX} shap" = "svm_dalex")),
-    plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
-      shinycssloaders::withSpinner(type = 8L),
+    fluidRow(
+      column(7,
+             plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
+               shinycssloaders::withSpinner(type = 8L)
+      ), 
+      column(5,
+             shiny::plotOutput("qq_plot", width = "100%", height = "700px") %>%
+               shinycssloaders::withSpinner(type = 8L)
+      )
+    ),
     hr(),
     h4("Selected data:"),
     verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
