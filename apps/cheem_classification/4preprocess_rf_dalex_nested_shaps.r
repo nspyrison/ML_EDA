@@ -67,8 +67,13 @@ shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y,
       .maha <- maha_vect_of(.shap)
       .olda <- olda_df_of(.shap, Y, d = d)
       .is_misclas <- predict(.rf) != Y
-      .plot_df <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD", .is_misclas)
-      names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer", "view", "is_misclassified")
+      .qq_color <- colorRampPalette(c("grey", "red"))(100)[
+        as.numeric(cut(.maha, breaks=100))]
+        
+      .plot_df <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD", 
+                        .is_misclas, colorRampPalette(c("grey", "red"))(100)[
+                          as.numeric(cut(.maha, breaks=100))])
+      names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer", "view", "is_misclassified", "manual_qq_color")
     })[3]
   })
   
@@ -80,7 +85,7 @@ shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y,
                         chunk = c("rf model", "dalex shap", "maha/olda"),
                         layer = layer_name)
   toc()
-  beepr::beep(4)
+  beepr::beep(1)
   return(list(plot_df = .plot_df,
               rf_model = .rf,
               shap_df = .shap, 
@@ -94,9 +99,12 @@ Y <- clas1
 layer_name <- "data"
 .maha <- maha_vect_of(X)
 .olda <- olda_df_of(X, Y, d = 2)
+.qq_col <- colorRampPalette(c("grey", "red"))(100)[
+  as.numeric(cut(.maha, breaks = 100))]
 ## format for faceted ggplot
-data_layer <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD", FALSE)
-names(data_layer) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer", "view", "is_misclassified")
+data_layer <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD", FALSE, .qq_col)
+names(data_layer) <- c("V1", "V2", "maha_dist", "rownum", "species", 
+                       "var_layer", "view", "is_misclassified", "manual_qq_color")
 toc()
 str(data_layer)
 
@@ -106,6 +114,7 @@ shap1_ls <- shap_layer_of(X, Y, "shap^1")
 shap2_ls <- shap_layer_of(shap1_ls$shap_df, Y, "shap^2")
 shap3_ls <- shap_layer_of(shap2_ls$shap_df, Y, "shap^3")
 shap4_ls <- shap_layer_of(shap3_ls$shap_df, Y, "shap^4")
+beepr::beep(2)
 
 ## NEEDS ITERATION
 layer_lists_ls <- list(shap1_ls = shap1_ls,
@@ -113,21 +122,22 @@ layer_lists_ls <- list(shap1_ls = shap1_ls,
                        shap3_ls = shap3_ls,
                        shap4_ls = shap4_ls)
 
-### rowbind plot_df -----
+### rbind plot_df -----
 b_plot_df <- data.frame(data_layer)
 .mute <- sapply(1:length(layer_lists_ls), function(i){
   this_plot_df <- layer_lists_ls[[i]]$plot_df
   b_plot_df <<- rbind(b_plot_df, this_plot_df)
 })
 
-## example of print confusion matrix
+## Example of print confusion matrix
+model_ls <- list()
 .mute <- sapply(1:length(layer_lists_ls), function(i){
-  this_rf_model <- layer_lists_ls[[i]]$rf_model
+  model_ls[[i]] <- layer_lists_ls[[i]]$rf_model
   print(paste0(names(layer_lists_ls)[[i]], ":"))
-  print(this_rf_model$confusion)
+  print(model_ls[[i]]$confusion)
 })
 
-## colbind decode table; I think just leave it to rownum, names, X, Y, pred1? shap values seem heavy
+## Cbind decode table; I think just leave it to rownum, names, X, Y, pred1? shap values seem heavy
 decode_df <- data.frame(rownum = 1:nrow(X), Y)
 .mute <- sapply(1:length(layer_lists_ls), function(i){
   this_rf_model <- layer_lists_ls[[i]]$rf_model
@@ -138,6 +148,18 @@ names(decode_df) <- c("rownum", "species", paste0("prediction_", names(layer_lis
 
 
 
+## EXPORT OBJECTS ----
+if(F){
+  save(decode_df,
+       b_plot_df,
+       model_ls,
+       file = "4nested_rf_dalexshap.RData")
+  file.copy("./4nested_rf_dalexshap.RData", to = "./apps/cheem_classification/data/4nested_rf_dalexshap.RData", overwrite = TRUE)
+  file.remove("./4nested_rf_dalexshap.RData")
+}
+if(F)
+  load("./apps/cheem_classification/data/4nested_rf_dalexshap.RData")
+
 
 
 if(F){
@@ -146,7 +168,7 @@ if(F){
   g <- b_plot_df %>%
     plotly::highlight_key(~rownum) %>%
     ggplot(aes(V1, V2, rownum = rownum,
-               color = sqrt(maha_dist + .0001), shape = species)) +
+               color = sqrt(maha_dist), shape = species)) +
     ## Black Mis classified:
     geom_point(aes(V1, V2, rownum = rownum), 
                data = b_plot_df[b_plot_df$is_misclassified == TRUE,],

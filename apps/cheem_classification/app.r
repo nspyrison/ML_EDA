@@ -16,6 +16,7 @@ server <- function(input, output, session){
     return(eval(qq_expr))
   })
   
+  
   ### main plot -----
   output$main_plot <- plotly::renderPlotly({
     ## BOX SELECT
@@ -27,6 +28,15 @@ server <- function(input, output, session){
       highlight(on = "plotly_selected", off = "plotly_deselect")
   })
   output$qq_plot <- shiny::renderPlot(qq_plot())
+  ## Nest shap
+  output$main_plot2 <- plotly::renderPlotly({
+    ## BOX SELECT
+    ggplotly(gg_nest_shap, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+      config(displayModeBar = FALSE) %>% ## Remove html buttons
+      layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
+      event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+      highlight(on = "plotly_selected", off = "plotly_deselect")
+  })
   
   ## Selection data lookup ------
   ## What ggplotly sees
@@ -40,6 +50,12 @@ server <- function(input, output, session){
     if (is.null(d)) return(NULL)
     return(DT::datatable(dat_decode[d$key, ], rownames = FALSE))
   })
+  # ## selected points of nested shap
+  # output$selected_plot_df2 <- DT::renderDT({ 
+  #   d <- event_data("plotly_selected")
+  #   if (is.null(d)) "Brushed points appear here (double-click to clear)"# else d
+  #   return(DT::datatable(decode_df[d$key, ], rownames = FALSE))
+  # })
   
 } ### Close function, assigning server.
 

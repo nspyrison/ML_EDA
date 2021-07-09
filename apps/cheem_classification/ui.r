@@ -17,11 +17,13 @@ if(F){ ## Not run, source/open local function files relative to proj
   load("./apps/cheem_classification/data/1preprocess_rf_treeshap.RData")
   load("./apps/cheem_classification/data/2preprocess_rf_dalex.RData")
   load("./apps/cheem_classification/data/3preprocess_svm_dalex.RData")
+  load("./apps/cheem_classification/data/4nested_rf_dalexshap.RData")
   ##
   file.edit("./apps/cheem_classification/trees_of_cheem.r")
   file.edit("./apps/cheem_classification/1preprocess_rf_treeshap.r")
   file.edit("./apps/cheem_classification/2preprocess_rf_dalex.r")
   file.edit("./apps/cheem_classification/3preprocess_svm_dalex.r")
+  file.edit("./apps/cheem_classification/4nested_rf_dalexshap.r")
 }
 
 
@@ -38,6 +40,28 @@ for(i in 1:length(file_nms)){
 }
 names(ls_dat_decode) <- names(ls_bound_spaces_df) <- names(ls_bound_qq_df) <- file_nms
 
+## Load nested shap
+load("./data/4nested_rf_dalexshap.RData")
+gg_nest_shap <- b_plot_df %>%
+  plotly::highlight_key(~rownum) %>%
+  ggplot(aes(V1, V2, rownum = rownum,
+             color = sqrt(maha_dist), shape = species)) +
+  ## Black Misclassified pts:
+  geom_point(aes(V1, V2, rownum = rownum), 
+             data = b_plot_df[b_plot_df$is_misclassified == TRUE, ],
+             color = "black", size = 3) +
+  geom_point() +
+  # ## Density contours, .99, .5, .1, .01
+  # geom_density2d(aes((V1, V2), color = "black",
+  #                contour_var = "ndensity", breaks = c(.1, .5, .9)) +
+  facet_grid(rows = vars(var_layer), cols = vars(view),
+             scales = "free") +
+  theme_bw() +
+  theme(axis.text  = element_blank(),
+        axis.ticks = element_blank()) +
+  scale_color_gradient2(name = "sqrt mahalonobis \n distance, within layer",
+                        low = "blue", mid = "grey", high = "red")
+qq_nest_shap <- NULL
 
 ## plot expressions ------
 ## EXPRESSION to make plot
@@ -46,7 +70,6 @@ gg_expr <- expression({
     highlight_key(~rownum) %>%
     ggplot(aes(V1, V2, rownum = rownum,
                color = maha_delta, shape = species)) +
-    #color = species, shape = sex)) +
     geom_point() +
     # ## Density contours, .99, .5, .1, .01
     # geom_density2d(aes(V1, V2), color = "black",
@@ -58,7 +81,7 @@ gg_expr <- expression({
     scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
                           low = "blue",mid = "grey",high = "red")
 })
-## EXPRESSION to make qq plo
+## EXPRESSION to make qq plot
 qq_expr <- expression({
   manual_color <- colorRampPalette(c("blue", "grey", "red"))(100)[
     as.numeric(cut(this_bound_qq_df[input$color_var],breaks=100))]
@@ -80,17 +103,12 @@ qq_expr <- expression({
 tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", fluidPage(
   ## Top input row -----
   fluidRow(
-    column(width = 4L,
-           p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
-           p("1) Remove NAs rows, remove most distant species."),
-           p("2) Create a RF model predicting between remaining species."),
-           p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
-           p("4) create maha spaces for the orginal and shap values"),
-           p("- Load above objects into shiny app; Explore SHAP sensivity with ggplot2/plotly."),
-    ),
-    column(width = 8L,
-     
-    )
+    p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
+    p("1) Remove NAs rows, remove most distant species."),
+    p("2) Create a RF model predicting between remaining species."),
+    p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
+    p("4) create maha spaces for the orginal and shap values"),
+    p("- Load above objects into shiny app; Explore SHAP sensivity with ggplot2/plotly."),
   ),
   ## main output row ----
   fluidRow(
@@ -112,11 +130,7 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
              shiny::plotOutput("qq_plot", width = "100%", height = "700px") %>%
                shinycssloaders::withSpinner(type = 8L)
       )
-    ),
-    hr(),
-    h4("Selected data:"),
-    verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
-    DT::DTOutput("selected_df")
+    )
   )
 )) ## Assign tab1_cheem
 
@@ -124,43 +138,25 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
 tab2_nested_shap <- tabPanel(title = "I heard you like SHAP...", fluidPage(
   ## Top input row -----
   fluidRow(
-    column(width = 4L,
-           p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
-           p("1) Remove NAs rows, remove most distant species."),
-           p("2) Create a RF model predicting between remaining species."),
-           p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
-           p("4) Repeat steps 1:3 on the SHAP space a couple of times."),
-           p("- Load above objects into shiny app; Explore SHAP sensivity with ggplot2/plotly."),
-    ),
-    column(width = 8L,
-           
-    )
+    p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
+    p("1) Remove NAs rows, remove most distant species."),
+    p("2) Create a RF model predicting between remaining species."),
+    p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
+    p("4) Repeat steps 1:3 on the output space!"),
   ),
   ## main output row ----
   fluidRow(
     shiny::hr(),
     h3("Palmer penguins"),
-    p("Color by the difference of the mahalonobis distances BETWEEN first shap space and original data."),
-    p("Shape is the species of the penguin, the membership was the target variable of the model"),
+    p("Color by the square root of the mahalonobis distances, within layer."),
+    p("Shape is the species of the penguin, the target variable of the model"),
     p("Click or click and drag to select points, double click to remove the selection."),
-    selectInput("model_shap_type", label = "Model and shap to use:",
-                choices = c("1) Random forest, {treeshap}" = "rf_treeshap",
-                            "2) Random forest, {DALEX} shap" = "rf_dalex",
-                            "3) SVM (radial), {DALEX} shap" = "svm_dalex")),
-    # fluidRow(
-    #   column(7,
-    #          plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
-    #            shinycssloaders::withSpinner(type = 8L)
-    #   ), 
-    #   column(5,
-    #          shiny::plotOutput("qq_plot", width = "100%", height = "700px") %>%
-    #            shinycssloaders::withSpinner(type = 8L)
-    #   )
-    # ),
+    p("Models are random forest, shap from DALEX."),
+    plotly::plotlyOutput("main_plot2", width = "40%", height = "800px") %>%
+      shinycssloaders::withSpinner(type = 8L),
     hr(),
     h4("Selected data:"),
-    verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
-    DT::DTOutput("selected_df")
+    DT::DTOutput("selected_df2")
   )
 )) ## Assign tab1_cheem
 
@@ -194,6 +190,10 @@ ui <- fluidPage(theme = shinythemes::shinytheme("flatly"),
                 navbarPage("Cheem",
                            tab1_cheem,
                            tab2_nested_shap,
-                           tabz_about)
+                           tabz_about),
+                hr(),
+                h4("Selected data:"),
+                verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
+                DT::DTOutput("selected_df")
 )
 
