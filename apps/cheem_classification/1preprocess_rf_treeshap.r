@@ -38,21 +38,33 @@ if(F){
 .lvls <- levels(clas1)
 i <- 1
 tic("RF fit")
+## Boolean test for treeshap, :()
 test1 <- as.integer(clas1 == .lvls[i])
 rf1 <- randomForest::randomForest(test1~.,
-                                   data = data.frame(test1, dat),
-                                   mtry = .rf_mtry)
+                                      data = data.frame(test1, dat),
+                                      mtry = .rf_mtry,
+                                      do.trace = TRUE)
+
 toc() ## .22 sec
 pred <- predict(rf1, newdata = dat) ## newdata is only Xs
-pred_clas <- .lvls[2 - as.integer(abs(pred) >= .5)]
-resid <- as.integer(clas1 == .lvls[i]) - pred
+pred_clas <- .lvls[2 - as.integer(pred >= .5)]
+resid <- test1 - pred
+table(pred_clas, clas1)
+
 
 
 ## shap_df {treeshap} ------
 gc()
 tic("treeshap")
-shap_df <- treeshap_df(rf1, dat)
+shap_df <- treeshap_df(rf_bool, dat)
 toc() ## 1.3 sec
+
+## class RF for correct measures
+rf_clas <- randomForest::randomForest(clas1~.,
+                                      data = data.frame(clas1, dat),
+                                      mtry = .rf_mtry,
+                                      do.trace = TRUE)
+rf_clas$confusion
 
 
 ## Normalized mahalonobis distances (median, covar) ----
@@ -71,19 +83,12 @@ maha_shape <- factor(maha_delta >= 0,
                      levels = c(FALSE, TRUE),
                      labels = c("maha SHAP larger", "maha data larger"))
 
-## Create variable spaces! ------
-### nMDS
-.n <- nrow(dat)
-nmds_dat  <- as.data.frame(MASS::isoMDS(dist(dat))$points) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "nMDS")
-nmds_shap <- as.data.frame(MASS::isoMDS(dist(shap_df))$points) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "nMDS")
-
-### PCA
-pca_dat <- as.matrix(dat) %*% spinifex::basis_pca(dat) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA")
-pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
-  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA")
+## Create view space ------
+# ### PCA
+# pca_dat <- as.matrix(dat) %*% spinifex::basis_pca(dat) %>%
+#   scale_01() %>% as.data.frame() %>% cbind(1:.n, "data", "PCA")
+# pca_shap <- as.matrix(shap_df) %*% spinifex::basis_pca(shap_df) %>%
+#   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "PCA")
 
 ### oLDA
 olda_dat  <- as.matrix(dat) %*% spinifex::basis_olda(dat, clas1) %>%
@@ -91,21 +96,14 @@ olda_dat  <- as.matrix(dat) %*% spinifex::basis_olda(dat, clas1) %>%
 olda_shap <- as.matrix(shap_df) %*% spinifex::basis_olda(shap_df, clas1) %>%
   scale_01() %>% as.data.frame() %>% cbind(1:.n, "shap", "oLD")
 
+
 ### maha cross
-bnmds_dat  <- cbind(nmds_dat,  maha_shap)
-bnmds_shap <- cbind(nmds_shap, maha_dat)
-bpca_dat   <- cbind(pca_dat,   maha_shap)
-bpca_shap  <- cbind(pca_shap,  maha_dat)
 bolda_dat  <- cbind(olda_dat,  maha_shap)
 bolda_shap <- cbind(olda_shap, maha_dat)
+
 ## combine
-names(bnmds_dat) <- names(bnmds_shap) <- names(bpca_dat) <- names(bpca_shap) <-
-  names(bolda_dat) <- names(bolda_shap) <- c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross")
-bound_spaces_df <- rbind(#bnmds_dat,
-                         #bnmds_shap,
-                         #bpca_dat,
-                         #bpca_shap,
-                         bolda_dat,
+names(bolda_dat) <- names(bolda_shap) <- c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "maha_cross")
+bound_spaces_df <- rbind(bolda_dat,
                          bolda_shap)
 beepr::beep(4)
 ## Add replicated classes
@@ -131,7 +129,13 @@ colnames(dat_decode) <- c("rownum", "maha_dist_dat", "maha_dist_shap",
 
 ## qq df
 .n <- nrow(dat)
-bound_qq_df <- data.frame(y = c(maha_dat, maha_shap),
+bound_qq_df <- data.frame(rownum = rep(1:nrow(dat), 2),
+                          y = c(maha_dat, maha_shap),
+                          maha_dat = rep(maha_dat, 2),
+                          maha_shap = rep(maha_shap, 2),
+                          maha_delta = rep(maha_delta, 2),
+                          manual_color = colorRampPalette(c("blue", "grey", "red"))(100)[
+                            as.numeric(cut(maha_delta,breaks=100))],
                           type = c(rep("maha(data)", .n), rep("maha(shap)", .n)))
 
 
@@ -148,17 +152,64 @@ if(F)
   load("./apps/cheem_classification/data/1preprocess_rf_treeshap.RData")
 
 
+## Experimental shapshap -----
+## WHAT IF WE FIT A MODEL ON SHAP SPACE?!
+
+## I don't trust flipping back and forth between the factor and boolean test, 
+##let's stick with dalex more reliable comparison:
+rf_clas$confusion ## confusion on data space.
+
+gc()
+tic("dalex LA")
+shap_df2 <- local_attribution_df(dat, clas1, rf_clas)
+toc() ## 41.25 sec
+
+## class RF ON SHAP SPACE
+rf_clas_shap <- randomForest::randomForest(clas1~.,
+                                           data = data.frame(clas1, shap_df2),
+                                           mtry = .rf_mtry,
+                                           do.trace = TRUE)
+rf_clas_shap$confusion ## BETTER PERFORMANCE!
+
+## Lets see if we can repeat for 100% accuracy
+gc()
+tic("dalex LA on shap space")
+shapshap_df <- local_attribution_df(shap_df2, clas1, rf_clas_shap)
+toc() ## 41.25 sec
+rf_clas_shapshap <- randomForest::randomForest(clas1~.,
+                                               data = data.frame(clas1, shapshap_df),
+                                               mtry = .rf_mtry,
+                                               do.trace = TRUE)
+rf_clas_shapshap$confusion ##  no better than performance on rf_clas_shap.
+classification_report(y_test, y_pred_test)
+classification_report(y_test, y_pred_test)
+
+##
+olda_shapshap <- as.matrix(shapshap_df) %*% spinifex::basis_olda(shapshap_df, clas1) %>%
+  scale_01() %>% as.data.frame() %>% cbind(1:.n, "shapshap", "oLD")
+
+
+bolda_shapshap <- data.frame(olda_shapshap, 
+                             maha_delta)
+names(bolda_shapshap) <- c(paste0("V", 1:2), "rownum", "obs_type", "var_space", "MAHA_DELTA")
+
 
 if(F){ ## QQ mockup
-  manual_color[order(bound_qq_df$maha_delta)] <- colorRampPalette(c("blue", "grey", "red"))(100)[
-    as.numeric(cut(bound_qq_df$maha_delta,breaks=100))]
-  ggplot(bound_qq_df, aes(sample = y^(1/2), )) + 
-    facet_grid(rows = vars(type)) + 
-    geom_qq(color = manual_color) + geom_qq_line() +
-    theme_bw() + 
+  idx <- order(bound_qq_df[, "maha_delta"][1:(nrow(bound_qq_df) / 2)])
+  bound_qq_df %>%
+    highlight_key(~rownum) %>% 
+    ggplot(aes(sample = y^(1/2), )) +
+    facet_grid(rows = vars(type)) +
+    geom_qq(color = manual_color[rep(idx, 2)]) + geom_qq_line() +
+    theme_bw() +
     labs(x = "theoretical", y = "Square root of observations", title = "Q-Q plots, (square root)") +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank())
+  # ggplotly(q, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+  #   config(displayModeBar = FALSE) %>% ## Remove html buttons
+  #   layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
+  #   event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+  #   highlight(on = "plotly_selected", off = "plotly_deselect")
 }
 
 if(F){
@@ -166,6 +217,7 @@ if(F){
   require("ggplot2")
   tic("prep ggplot ")
   str(bound_spaces_df)
+  
   
   g <- bound_spaces_df %>%
     highlight_key(~rownum) %>% 
@@ -181,10 +233,7 @@ if(F){
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank()) +
     scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
-                         low = "blue",
-                         mid = "grey",
-                         high = "red"
-    )
+                         low = "blue", mid = "grey", high = "red")
   
   ## BOX SELECT
   ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.

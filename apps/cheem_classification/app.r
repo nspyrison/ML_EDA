@@ -7,21 +7,26 @@ source("ui.r", local = TRUE, encoding = "utf-8")
 
 server <- function(input, output, session){
   
-  ### main plot -----
+  gg_plot <- reactive({
+    this_bound_spaces_df <- ls_bound_spaces_df[[input$model_shap_type]]
+    return(eval(gg_expr))
+  })
+  qq_plot <- reactive({
+    this_bound_qq_df <- ls_bound_qq_df[[input$model_shap_type]]
+    return(eval(qq_expr))
+  })
   
+  ### main plot -----
   output$main_plot <- plotly::renderPlotly({
-    g <- get(paste0("g_", input$model_shap_type))
     ## BOX SELECT
+    g <- gg_plot() 
     ggplotly(g, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
       config(displayModeBar = FALSE) %>% ## Remove html buttons
       layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
       event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
       highlight(on = "plotly_selected", off = "plotly_deselect")
-  }) ## Loaded in UI.
-  output$qq_plot <- shiny::renderPlot({
-    qq <- get(paste0("qq_", input$model_shap_type))
-    qq
-  }) ## Loaded in UI.
+  })
+  output$qq_plot <- shiny::renderPlot(qq_plot())
   
   ## Selection data lookup ------
   ## What ggplotly sees

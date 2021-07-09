@@ -24,9 +24,25 @@ if(F){ ## Not run, source/open local function files relative to proj
   file.edit("./apps/cheem_classification/3preprocess_svm_dalex.r")
 }
 
+
+## Load  -----
+ls_dat_decode <- ls_bound_spaces_df <- ls_bound_qq_df <- list()
+# load("./data/1preprocess_rf_treeshap.RData") ## objs: dat_decode, bound_spaces_df, bound_qq_df
+file_nms <- c("rf_treeshap", "rf_dalex", "svm_dalex")
+for(i in 1:length(file_nms)){
+  .fp <- paste0("./data/", i, "preprocess_", file_nms[i], ".RData") ## local: ./apps/cheem_classification/*
+  load(.fp)
+  ls_dat_decode[[i]] <- dat_decode
+  ls_bound_spaces_df[[i]] <- bound_spaces_df
+  ls_bound_qq_df[[i]] <- bound_qq_df
+}
+names(ls_dat_decode) <- names(ls_bound_spaces_df) <- names(ls_bound_qq_df) <- file_nms
+
+
+## plot expressions ------
 ## EXPRESSION to make plot
-g_expr <- expression({
-  bound_spaces_df %>%
+gg_expr <- expression({
+  this_bound_spaces_df %>%
     highlight_key(~rownum) %>%
     ggplot(aes(V1, V2, rownum = rownum,
                color = maha_delta, shape = species)) +
@@ -44,10 +60,11 @@ g_expr <- expression({
 })
 ## EXPRESSION to make qq plo
 qq_expr <- expression({
-  # manual_color <- colorRampPalette(c("blue", "grey", "red"))(100)[
-  #   as.numeric(cut(bound_qq_df$maha_delta,breaks=100))]
-  ggplot(bound_qq_df, aes(sample = y^(1/2))) + 
-    facet_grid(rows = vars(type)) + 
+  manual_color <- colorRampPalette(c("blue", "grey", "red"))(100)[
+    as.numeric(cut(this_bound_qq_df[input$color_var],breaks=100))]
+  this_bound_qq_df %>%
+    ggplot(aes(sample = y^(1/2))) +
+    facet_grid(rows = vars(type)) +
     stat_qq() + stat_qq_line() +
     theme_bw() + 
     labs(x = "theoretical", y = "Square root of observations", title = "Q-Q plots, (square root)") +
@@ -57,28 +74,18 @@ qq_expr <- expression({
           axis.ticks = element_blank())
 })
 
-## Load  -----
-load("./data/1preprocess_rf_treeshap.RData") ## objs: dat_decode, bound_spaces_df
-g_rf_treeshap  <- eval(g_expr)
-qq_rf_treeshap <- eval(qq_expr)
-load("./data/2preprocess_rf_dalex.RData")
-g_rf_dalex  <- eval(g_expr)
-qq_rf_dalex <- eval(qq_expr)
-load("./data/3preprocess_svm_dalex.RData")
-g_svm_dalex  <- eval(g_expr) 
-qq_svm_dalex <- eval(qq_expr)
 
 
-##### tab1_cheem ----
+##### tab1_cheem -----
 tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", fluidPage(
-  ## Top input row ----
+  ## Top input row -----
   fluidRow(
     column(width = 4L,
            p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
            p("1) Remove NAs rows, remove most distant species."),
            p("2) Create a RF model predicting between remaining species."),
            p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
-           p("4) Create nMDS-, PCA-, and oLDA-, and maha spaces for the orginal and shap values"),
+           p("4) create maha spaces for the orginal and shap values"),
            p("- Load above objects into shiny app; Explore SHAP sensivity with ggplot2/plotly."),
     ),
     column(width = 8L,
@@ -113,9 +120,53 @@ tab1_cheem <- tabPanel(title = "linked brushing of SHAP- and data- spaces", flui
   )
 )) ## Assign tab1_cheem
 
+## tab2_nested_shap ----
+tab2_nested_shap <- tabPanel(title = "I heard you like SHAP...", fluidPage(
+  ## Top input row -----
+  fluidRow(
+    column(width = 4L,
+           p("- Data: palmer penguins, X: 4 continuous physical measurements, Classes: species, sex."),
+           p("1) Remove NAs rows, remove most distant species."),
+           p("2) Create a RF model predicting between remaining species."),
+           p("3) Extract SHAP values of EACH observation, bring back to [nxp] observation space."),
+           p("4) Repeat steps 1:3 on the SHAP space a couple of times."),
+           p("- Load above objects into shiny app; Explore SHAP sensivity with ggplot2/plotly."),
+    ),
+    column(width = 8L,
+           
+    )
+  ),
+  ## main output row ----
+  fluidRow(
+    shiny::hr(),
+    h3("Palmer penguins"),
+    p("Color by the difference of the mahalonobis distances BETWEEN first shap space and original data."),
+    p("Shape is the species of the penguin, the membership was the target variable of the model"),
+    p("Click or click and drag to select points, double click to remove the selection."),
+    selectInput("model_shap_type", label = "Model and shap to use:",
+                choices = c("1) Random forest, {treeshap}" = "rf_treeshap",
+                            "2) Random forest, {DALEX} shap" = "rf_dalex",
+                            "3) SVM (radial), {DALEX} shap" = "svm_dalex")),
+    # fluidRow(
+    #   column(7,
+    #          plotly::plotlyOutput("main_plot", width = "100%", height = "700px") %>%
+    #            shinycssloaders::withSpinner(type = 8L)
+    #   ), 
+    #   column(5,
+    #          shiny::plotOutput("qq_plot", width = "100%", height = "700px") %>%
+    #            shinycssloaders::withSpinner(type = 8L)
+    #   )
+    # ),
+    hr(),
+    h4("Selected data:"),
+    verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
+    DT::DTOutput("selected_df")
+  )
+)) ## Assign tab1_cheem
 
-##### tab2_about -----
-tab2_about <- tabPanel("About", fluidPage(
+
+##### tabz_about -----
+tabz_about <- tabPanel("About", fluidPage(
   h3("Context & motivation:"),
   p("Modern modeling faces a trade of between interprebility and accuracy of a model. 
     Black-box models use increasingly more and complex interaction terms between features. 
@@ -142,6 +193,7 @@ ui <- fluidPage(theme = shinythemes::shinytheme("flatly"),
                 ## Content:
                 navbarPage("Cheem",
                            tab1_cheem,
-                           tab2_about)
+                           tab2_nested_shap,
+                           tabz_about)
 )
 
