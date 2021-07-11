@@ -1,4 +1,5 @@
-## Creates objs for use in shiny app
+# FIFA regression, Interated nesting -----
+## RF & treeshap
 
 ## Dependencies ------
 require("DALEX")
@@ -8,38 +9,74 @@ require("plotly") ## Linked brushing
 ##
 require("tictoc")
 require("dplyr")
-require("corrplot") 
+require("beepr")
 ## Local files
 source("./apps/cheem_classification/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
 if(F) ## Manually run to view file:
   file.edit("./apps/cheem_classification/trees_of_cheem.r")
 
-set.seed(303)
-## Setup data ------
-dat <- tourr::flea[,-7]
-if(F)
-  corrplot::corrplot(cor(dat))
-## FLEA regression
-X <- dat[, -5]
-Y <- dat[, 5]
-clas <- tourr::flea$species
+## Setup ------
+set.seed(303) ## DALEX Shap performance changed, we are using treeshap here.
+.raw <- DALEX::fifa
+.scaled <- .raw %>%
+  dplyr::select(-c(`nationality`, ## useless class
+                   `overall`, `potential`, `value_eur`, `wage_eur`)) %>% ## potential target vars.
+  spinifex::scale_01() %>% as.data.frame()
+
+if(F) ## View corrplot?
+  corrplot::corrplot(cor(.scaled), 
+                     method = "circle", ## geom
+                     type = "upper", ## only upper triangle
+                     diag = F, ## remove auto correlation
+                     order = "FPC", ## First principal component
+                     tl.col = "black", tl.srt = 90, ## Text label color and rotation
+                     tl.pos = "td")
+
+### Munging -----
+## Agg some highly correlated vars.
+dat <- .scaled %>% dplyr::mutate(
+  .keep = "none",
+  bdy = (weight_kg+height_cm)/2, ## bmi wasn't working well after 01 scaling.
+  age = age,
+  react = movement_reactions,
+  atk = (attacking_finishing+skill_long_passing+attacking_volleys+
+           power_long_shots+skill_curve+mentality_positioning+attacking_crossing+
+           attacking_short_passing+skill_dribbling+skill_ball_control)/10,
+  def = (defending_sliding_tackle+mentality_interceptions+
+           defending_standing_tackle+defending_marking+mentality_aggression)/5,
+  acc = (attacking_heading_accuracy+power_shot_power)/2,
+  mvm = (movement_sprint_speed+movement_balance+movement_acceleration+
+           mentality_vision+mentality_composure+movement_agility+
+           mentality_penalties+skill_fk_accuracy+power_stamina+movement_reactions)/10,
+  pwr = (power_strength+power_jumping)/2,
+  gk = (goalkeeping_diving+goalkeeping_positioning+goalkeeping_reflexes+
+          goalkeeping_handling+goalkeeping_kicking)/5,
+)
+## Starting with 42 variables, we remove `nationality`, and some potential Y vars,
+#### and aggregate into 9 aggregate 'aspect' dimensions based on var correlation 
+
+## Filter and remove Goal keepers to be on the safe side.
+#dat_gk  <- dat[dat$gk >= .5, ] ## 467 obs, 9.34%
+.idx_is_fld <- dat$gk < .5 ## remaining 91%, fielders
+X <- dat_fld <- scale_01(dat[.idx_is_fld, -9]) ## scale again after removing.
+Y <- tgt_var <- .raw$wage_eur[.idx_is_fld] ## Unscaled wages of the fielders
 
 ## Local functions -----
 ## Normalized mahalonobis distances | given median, covar
-maha_vect_of <- function(x, do_normalize = TRUE){ ## dist from in-class column median(x), cov(x)
+maha_vect_of <- function(x, do_normalize = TRUE){ ## distance from median(x), cov(x)
   maha <- mahalanobis(x, apply(x, 2, median), cov(x)) %>%
     matrix(ncol = 1)
   if(do_normalize) maha <- spinifex::scale_01(maha)
   return(maha)
 }
-olda_df_of <- function(x, class, d = 2, do_normalize = TRUE){
-  olda <- as.matrix(x) %*% spinifex::basis_olda(x, class, d = d) 
-  if(do_normalize) olda <- spinifex::scale_01(olda) 
-  return(as.data.frame(olda))
+pca_df_of <- function(x, class, d = 2, do_normalize = TRUE){
+  pca <- as.matrix(x) %*% spinifex::basis_pca(x, d = d) 
+  if(do_normalize) pca <- spinifex::scale_01(pca) 
+  return(as.data.frame(pca))
 }
-plot_df_of <- function(x, class, d = 2, model = NULL, layer_name){ ## uses maha/ olda
+plot_df_of <- function(x, d = 2, model = NULL, layer_name){ ## uses maha/pca
   .maha <- maha_vect_of(x)
-  .olda <- olda_df_of(x, class, d = d)
+  .pca <- pca_df_of(x, class, d = d)
   if(is.null(model)){
     .resid <- NA
     .layer_ext <- layer_name
@@ -49,77 +86,67 @@ plot_df_of <- function(x, class, d = 2, model = NULL, layer_name){ ## uses maha/
   }
   .qq_color <- colorRampPalette(c("grey", "red"))(100)[
     as.numeric(cut(.maha, breaks = 100))]
-  .plot_df <- cbind(.olda, .maha, 1:nrow(X), Y, .layer_ext, "oLD",
+  .plot_df <- cbind(.pca, .maha, 1:nrow(X), Y, .layer_ext, "PCA",
                     .resid, .qq_color, order(.maha))
   names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer",
                        "view", "residual", "manual_qq_color", "idx_maha_ord")
   return(.plot_df)
 }
-### shap nesting function -----
-if(is.discrete(Y)) .rf_mtry <- sqrt(ncol(X)) else .rf_mtry <- ncol(X) / 3
-shap_layer_of <- function(X, Y, clas, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y, 
-  tic(paste0("shap_layer_of ", layer_name))
-  ### RF model -----
-  rf_expr <- expression({
-    sec_rf <- system.time({
-      gc()
-      .rf <- randomForest::randomForest(Y~., data = data.frame(Y, X), mtry = .rf_mtry)
-      print(.rf$confusion) ## Confusion matrix of rf model.
-    })[3]
-  })
-  ### DALEX shap -----
-  dalex_shap_expr <- expression({
+### shap nesting function, and private functions/expressions -----
+is.discrete <- function(x) ## See plyr::is.discrete().
+  is.factor(x) || is.character(x) || is.logical(x)
+legwork_expr <- expression({
+  ## RF model
+  sec_rf <- system.time({
+    .m <- capture.output(gc())
+    .rf <- randomForest::randomForest(Y~., data = data.frame(Y, X), mtry = .rf_mtry)
+    print(.rf$confusion) ## Confusion matrix of rf model.
+  })[3]
+  ## treeshap
     sec_shap <- system.time({
-      gc()
-      .shap <- local_attribution_df(X, Y, .rf)
+      .m <- capture.output(gc())
+      .shap <- treeshap_df(.rf, X)
     })[3]
-  })
-  ### plot_df_of of shap -----
-  maha_n_olda_expr <- expression({
-    sec_maha_olda <- system.time({
-      gc()
-      .plot_df <- plot_df_of(.shap, clas, d, .rf, layer_name)
+  ## plot_df_of of shap
+    sec_maha_pca <- system.time({
+      .m <- capture.output(gc())
+      .plot_df <- plot_df_of(.shap, d, .rf, layer_name)
     })[3]
-  })
-  
-  eval(rf_expr)
-  eval(dalex_shap_expr)
-  eval(maha_n_olda_expr)
-  
-  time_df <- data.frame(runtime_seconds = c(sec_rf, sec_shap, sec_maha_olda),
-                        chunk = c("rf model", "dalex shap", "maha/olda"),
+})
+
+shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){
+  tic(paste0("shap_layer_of ", layer_name))
+  eval(legwork_expr)
+  ## Watching performance
+  time_df <- data.frame(runtime_seconds = c(sec_rf, sec_shap, sec_maha_pca),
+                        chunk = c("rf model", "rf treeshap shap", "maha/pca"),
                         layer = layer_name)
   toc()
   beepr::beep(1)
   return(list(plot_df = .plot_df,
               rf_model = .rf,
-              shap_df = .shap, 
+              shap_df = .shap,
               time_df = time_df))
 }
 
-{
+## Formatting for consumtion, esp in shiny
+nested_shap_layers <- function(X, Y, N_shap_layers = 3, d =2){
+  loc_attr_nm <- "shap"
+  
   ## data layer, plot_df only ----
   tic("Data layer, plot_df")
-  data_layer <- plot_df_of(X, clas, d = 2, model = NULL, layer_name = "data")
+  data_plot_df <- plot_df_of(X, d = 2, model = NULL, layer_name = "data")
   toc()
-  str(data_layer)
+  .next_layers_X <- list(X)
+  ls_layer_lists <- list()
+  for(i in 1:N_shap_layers){
+    this_layer_nm <- paste0(loc_attr_nm, "^", i)
+    ls_layer_lists[[i]] <- shap_layer_of(.next_layers_X, Y, clas, this_layer_nm)
+  }
   
-  ## NEEDS ITERATION
-  ## first Shap level from function
-  shap1_ls <- shap_layer_of(X, Y, clas, "shap^1")
-  shap2_ls <- shap_layer_of(shap1_ls$shap_df, Y, clas, "shap^2")
-  shap3_ls <- shap_layer_of(shap2_ls$shap_df, Y, clas, "shap^3")
-  shap4_ls <- shap_layer_of(shap3_ls$shap_df, Y, clas, "shap^4")
-  
-  
-  ## NEEDS ITERATION
-  layer_lists_ls <- list(shap1_ls = shap1_ls,
-                         shap2_ls = shap2_ls,
-                         shap3_ls = shap3_ls,
-                         shap4_ls = shap4_ls)
-  
+  ##TODO CONTINUE HERE>
   ### rbind plot_df -----
-  b_plot_df <- data.frame(data_layer)
+  b_plot_df <- data.frame(data_plot_df)
   .mute <- sapply(1:length(layer_lists_ls), function(i){
     this_plot_df <- layer_lists_ls[[i]]$plot_df
     b_plot_df <<- rbind(b_plot_df, this_plot_df)

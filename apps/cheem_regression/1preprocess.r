@@ -1,6 +1,4 @@
-### MANUAL C+P PREPROCESS1 TRYING TO FIX NMDS PIPING -----
-
-## Creates objs for use in shiny app:
+# FIFA regression, RF & treeshap -----
 
 ## Dependencies ------
 require("DALEX")
@@ -16,73 +14,50 @@ if(F) ## Manually run to view file:
 
 
 ## Setup ------
+set.seed(303) ## DALEX Shap performance changed, we are using treeshap here.
 .raw <- DALEX::fifa
-.scaled <- .raw %>% dplyr::select(-c(`nationality`, `value_eur`)) %>%
+.scaled <- .raw %>%
+  dplyr::select(-c(`nationality`, ## useless class
+                   `overall`, `potential`, `value_eur`, `wage_eur`)) %>% ## potential target vars.
   spinifex::scale_01() %>% as.data.frame()
 
-## Correlation embedding -----
-## There are too many correlated features, so we'll aggregate them
-if(F){
-  str(.scaled)
-  tic("correlation")
-  .scaled %>%
-    cor() %>%
-    corrplot::corrplot(method = "circle", ## geom
-                       type = "upper", ## only upper triangle
-                       diag = F, ## remove auto correlation
-                       order = "FPC", ## First principal component
-                       tl.col = "black", tl.srt = 90, ## Text label color and rotation
-                       tl.pos = "td")
-  toc()
-}
+if(F) ## View corrplot?
+  corrplot::corrplot(cor(.scaled), 
+                     method = "circle", ## geom
+                     type = "upper", ## only upper triangle
+                     diag = F, ## remove auto correlation
+                     order = "FPC", ## First principal component
+                     tl.col = "black", tl.srt = 90, ## Text label color and rotation
+                     tl.pos = "td")
 
-
-## Munging -----
+### Munging -----
 ## Agg some highly correlated vars.
 dat <- .scaled %>% dplyr::mutate(
   .keep = "none",
-  ## Target variables, agg skill, and financial 
-  #wage = wage_eur,
   bdy = (weight_kg+height_cm)/2, ## bmi wasn't working well after 01 scaling.
   age = age,
-  skl = (potential+overall+movement_reactions)/3,
-  ## Attack
+  react = movement_reactions,
   atk = (attacking_finishing+skill_long_passing+attacking_volleys+
            power_long_shots+skill_curve+mentality_positioning+attacking_crossing+
            attacking_short_passing+skill_dribbling+skill_ball_control)/10,
-  ## Defense
   def = (defending_sliding_tackle+mentality_interceptions+
            defending_standing_tackle+defending_marking+mentality_aggression)/5,
-  ## Accuracy
   acc = (attacking_heading_accuracy+power_shot_power)/2,
-  ## Movement
   mvm = (movement_sprint_speed+movement_balance+movement_acceleration+
            mentality_vision+mentality_composure+movement_agility+
            mentality_penalties+skill_fk_accuracy+power_stamina+movement_reactions)/10,
-  ## Power
   pwr = (power_strength+power_jumping)/2,
-  ## Goalkeeping
   gk = (goalkeeping_diving+goalkeeping_positioning+goalkeeping_reflexes+
           goalkeeping_handling+goalkeeping_kicking)/5,
 )
-## Starting with 42 variables, we remove `nationality`, and aggregate the 
-#### other 41 variables into 9 aggregate dimensions based on like correlation 
-#### of variable, including `value` our tgt variable.
+## Starting with 42 variables, we remove `nationality`, and some potential Y vars,
+#### and aggregate into 9 aggregate 'aspect' dimensions based on var correlation 
 
-## Assume the 2nd cluster is goalkeepers, filter on GK and then remove:
-dat_gk  <- dat[dat$gk >= .5, ] ## 467 obs, 9.34%
-dat_fld <- dat[dat$gk < .5, -9] ## remaining 91%, fielders
-dat_fld <- scale_01(dat_fld) ## scale again after removing.
- 
-## Normalize each column by its standard deviations
-tgt_var <- .raw$wage_eur[dat$gk < .5] ## Unsealed wages of the fielders
-
-## Validation projection, 2nd cluster gone after removing gk!
-if(F){
-  proj <- as.matrix(dat_fld) %*% basis_pca(dat_fld, d = 5) %>% as.data.frame()
-  colnames(proj) <- paste0("PC", 1:5)
-  GGally::ggpairs(proj)
-}
+## Filter and remove Goal keepers to be on the safe side.
+#dat_gk  <- dat[dat$gk >= .5, ] ## 467 obs, 9.34%
+.idx_is_fld <- dat$gk < .5 ## remaining 91%, fielders
+X <- dat_fld <- scale_01(dat[.idx_is_fld, -9]) ## scale again after removing.
+Y <- tgt_var <- .raw$wage_eur[.idx_is_fld] ## Unscaled wages of the fielders
 
 ## Random forest model {randomForest} -----
 is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
