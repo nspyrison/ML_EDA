@@ -28,6 +28,8 @@ dat <- spinifex::scale_sd(raw_rmna[, 3:6]) %>% as.data.frame()
 clas1 <- factor(raw_rmna$species, levels = lvls[1:2]) ## Manually remove 3rd lvl
 clas2 <- raw_rmna$sex
 
+
+## Local functions -----
 ## Normalized mahalonobis distances | given median, covar
 maha_vect_of <- function(x, do_normalize = TRUE){ ## dist from in-class column median(x), cov(x)
   maha <- mahalanobis(x, apply(x, 2, median), cov(x)) %>%
@@ -40,8 +42,19 @@ olda_df_of  <- function(x, class, d = 2, do_normalize = TRUE){
   if(do_normalize) olda <- spinifex::scale_01(olda) 
   return(as.data.frame(olda))
 }
+plot_df_of <- function(x, clas, d = 2){ ## uses maha/ olda
+  .maha <- maha_vect_of(x)
+  .olda <- olda_df_of(x, clas, d = d)
+  .is_misclas <- predict(.rf) != Y
+  .qq_color <- colorRampPalette(c("grey", "red"))(100)[
+    as.numeric(cut(.maha, breaks = 100))]
+  .plot_df <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD",
+                    .is_misclas, .qq_color, order(.maha))
+  names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer",
+                       "view", "is_misclassified", "manual_qq_color", "idx_maha_ord")
+}
 
-## shap nesting function -----
+### shap nesting function -----
 shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y, 
   tic(paste0("shap_layer_of ", layer_name))
   ### RF model -----
@@ -64,16 +77,7 @@ shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y,
   maha_n_olda_expr <- expression({
     sec_maha_olda <- system.time({
       gc()
-      .maha <- maha_vect_of(.shap)
-      .olda <- olda_df_of(.shap, Y, d = d)
-      .is_misclas <- predict(.rf) != Y
-      .qq_color <- colorRampPalette(c("grey", "red"))(100)[
-        as.numeric(cut(.maha, breaks=100))]
-        
-      .plot_df <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD", 
-                        .is_misclas, colorRampPalette(c("grey", "red"))(100)[
-                          as.numeric(cut(.maha, breaks=100))])
-      names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer", "view", "is_misclassified", "manual_qq_color")
+      .plot_df  <- plot_df_of(.shap, Y, d)
     })[3]
   })
   
@@ -92,21 +96,15 @@ shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y,
               time_df = time_df))
 }
 
-## data layer, plot_df only
+
+## data layer, plot_df only -----
 tic("Data layer, plot_df")
 X <- dat
 Y <- clas1
 layer_name <- "data"
-.maha <- maha_vect_of(X)
-.olda <- olda_df_of(X, Y, d = 2)
-.qq_col <- colorRampPalette(c("grey", "red"))(100)[
-  as.numeric(cut(.maha, breaks = 100))]
-## format for faceted ggplot
-data_layer <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD", FALSE, .qq_col)
-names(data_layer) <- c("V1", "V2", "maha_dist", "rownum", "species", 
-                       "var_layer", "view", "is_misclassified", "manual_qq_color")
+data_plot_df  <- plot_df_of(X, Y, 2)
 toc()
-str(data_layer)
+str(data_plot_df)
 
 ## NEEDS ITERATION
 ## first Shap level from function
@@ -123,7 +121,7 @@ layer_lists_ls <- list(shap1_ls = shap1_ls,
                        shap4_ls = shap4_ls)
 
 ### rbind plot_df -----
-b_plot_df <- data.frame(data_layer)
+b_plot_df <- data.frame(data_plot_df)
 .mute <- sapply(1:length(layer_lists_ls), function(i){
   this_plot_df <- layer_lists_ls[[i]]$plot_df
   b_plot_df <<- rbind(b_plot_df, this_plot_df)
@@ -170,7 +168,7 @@ if(F){
     ggplot(aes(V1, V2, rownum = rownum,
                color = sqrt(maha_dist), shape = species)) +
     ## Black Mis classified:
-    geom_point(aes(V1, V2, rownum = rownum), 
+    geom_point(aes(V1, V2, rownum = rownum),
                data = b_plot_df[b_plot_df$is_misclassified == TRUE,],
                color = "black", size = 3) +
     geom_point() +
