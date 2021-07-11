@@ -62,13 +62,11 @@ Y <- tgt_var <- .raw$wage_eur[.idx_is_fld] ## Unscaled wages of the fielders
 ## Random forest model {randomForest} -----
 is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
   is.factor(x) || is.character(x) || is.logical(x)
-.p <- ncol(dat_fld)
-.rf_mtry <- if(is.discrete(tgt_var)) sqrt(.p) else .p / 3L
-system.time(
-  .rf <- randomForest::randomForest(tgt_var~.,
-                                    data = data.frame(tgt_var, dat_fld),
-                                    mtry = .rf_mtry)
-) ## ~ 12 sec
+.m <- capture.output(gc())
+.hp_mtry <- if(is.discrete(Y)) sqrt(ncol(X)) else ncol(X) / 3L
+.hp_node <- max(if(is.discrete(tgt_var)) 1 else 5, ceiling(nrow(X) / 500))
+.rf <- randomForest::randomForest(Y~., data = data.frame(Y, X),
+                                  mtry = .hp_mtry, nodesize = .hp_node)
 pred <- predict(.rf, newdata = dat_fld) ## newdata doesn't have Y
 resid <- tgt_var - pred
 
@@ -110,13 +108,13 @@ if(F)
 maha_vect_of <- function(x){ ## dist from in-class column median(x), cov(x)
   mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
     matrix(ncol = 1) %>%
-    scale_01() %>% 
+    scale_01() %>%
     return
 }
 maha_dat  <- maha_vect_of(dat_fld)
 maha_shap <- maha_vect_of(shap_df)
 maha_delta <- maha_shap - maha_dat
-hist(maha_delta) ## there are fewer negative values; 
+hist(maha_delta) ## there are fewer negative values;
 ### fewer pts are further away in shap sp than data space
 maha_color <- maha_delta + median(maha_delta)
 maha_shape <- factor(maha_delta >= 0,
