@@ -7,8 +7,8 @@ require("spinifex")
 require("ggplot2")
 require("plotly") ## Linked brushing
 ##
-require("tictoc")
 require("dplyr")
+require("tictoc")
 require("beepr")
 ## Local files
 source("./apps/cheem_classification/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
@@ -16,7 +16,6 @@ if(F) ## Manually run to view file:
   file.edit("./apps/cheem_classification/trees_of_cheem.r")
 
 ## Setup ------
-set.seed(303) ## DALEX Shap performance changed, we are using treeshap here.
 .raw <- DALEX::fifa
 .scaled <- .raw %>%
   dplyr::select(-c(`nationality`, ## useless class
@@ -60,6 +59,12 @@ dat <- .scaled %>% dplyr::mutate(
 .idx_is_fld <- dat$gk < .5 ## remaining 91%, fielders
 X <- dat_fld <- scale_01(dat[.idx_is_fld, -9]) ## scale again after removing.
 Y <- tgt_var <- .raw$wage_eur[.idx_is_fld] ## Unscaled wages of the fielders
+set.seed(303)
+.idx_test <- sample(1:nrow(X), size = round(.2 * nrow(X))) ### HOLD OUT TEST DATA.
+X_test  <- X[.idx_test,  ]
+X_train <- X[-.idx_test, ]
+Y_test  <- Y[ .idx_test]
+Y_train <- Y[-.idx_test]
 
 ## Local functions -----
 ## Normalized mahalonobis distances | given median, covar
@@ -74,7 +79,7 @@ pca_df_of <- function(x, class, d = 2, do_normalize = TRUE){
   if(do_normalize) pca <- spinifex::scale_01(pca) 
   return(as.data.frame(pca))
 }
-plot_df_of <- function(x, y, d = 2, model = NULL, layer_name){ ## uses maha/pca
+plot_df_of <- function(x, y, d = 2, model = NULL, layer_name){ ## consumes maha&pca
   .maha <- maha_vect_of(x)
   .pca <- pca_df_of(x, class, d = d)
   if(is.null(model)){
@@ -86,34 +91,32 @@ plot_df_of <- function(x, y, d = 2, model = NULL, layer_name){ ## uses maha/pca
   }
   .qq_color <- colorRampPalette(c("grey", "red"))(100)[
     as.numeric(cut(.maha, breaks = 100))]
-  .plot_df <- cbind(.pca, .maha, 1:nrow(X), y, .layer_ext, "PCA",
+  .plot_df <- cbind(.pca, .maha, 1:nrow(x), y, .layer_ext, "PCA",
                     .resid, .qq_color, order(.maha))
   names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer",
                        "view", "residual", "manual_qq_color", "idx_maha_ord")
   return(.plot_df)
 }
 ### shap nesting function, and private functions/expressions -----
-is.discrete <- function(x) ## See plyr::is.discrete().
-  is.factor(x) || is.character(x) || is.logical(x)
-shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2){
-  tic(paste0("shap_layer_of ", layer_name))
+shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2, 
+                          verbose = TRUE, noisy = TRUE){
+  if(verbose == TRUE) tictoc::tic(paste0("shap_layer_of ", layer_name))
+  .is_y_disc <- is.factor(y) || is.character(y) || is.logical(y)
   
-  ## Legwork:
-  ### RF model
+  ## RF model
   sec_rf <- system.time({
     .m <- capture.output(gc())
-    .hp_mtry <- if(is.discrete(y)) sqrt(ncol(x)) else ncol(x) / 3L
-    .hp_node <- max(if(is.discrete(tgt_var)) 1 else 5, ceiling(nrow(x) / 500))
+    .hp_mtry <- if(.is_y_disc == TRUE) sqrt(ncol(x)) else ncol(x) / 3L
+    .hp_node <- max(if(.is_y_disc == TRUE) 1 else 5, ceiling(nrow(x) / 500))
     .rf <- randomForest::randomForest(y~., data = data.frame(y, x),
                                       mtry = .hp_mtry, nodesize = .hp_node)
-    print(.rf$confusion) ## Confusion matrix of rf model.
   })[3]
-  ### treeshap
+  ## treeshap
   sec_shap <- system.time({
     .m <- capture.output(gc())
     .shap <- treeshap_df(.rf, x)
   })[3]
-  ### plot_df_of of shap
+  ## plot_df_of shap
   sec_maha_pca <- system.time({
     .m <- capture.output(gc())
     .plot_df <- plot_df_of(.shap, y, d, .rf, layer_name)
@@ -121,10 +124,11 @@ shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2){
   
   ## Watching performance
   time_df <- data.frame(runtime_seconds = c(sec_rf, sec_shap, sec_maha_pca),
-                        chunk = c("rf model", "rf treeshap shap", "maha/pca"),
+                        chunk = c("rf model", "(rf) treeshap shap", "maha/pca"),
                         layer = layer_name)
-  toc()
-  beepr::beep(1)
+  
+  if(verbose == TRUE) tictoc::toc()
+  if(noisy == TRUE) beepr::beep(1)
   return(list(plot_df = .plot_df,
               rf_model = .rf,
               shap_df = .shap,
@@ -133,79 +137,134 @@ shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2){
 
 ## nested_shap_layers -----
 ## Iterate and format for consumption
-nested_shap_layers <- function(x, y, N_shap_layers = 3, d = 2){
+nested_shap_layers <- function(x, y, n_shap_layers = 3, x_test, d = 2,
+                               verbose = TRUE, noisy = TRUE){
   loc_attr_nm <- "shap"
+  if(verbose == TRUE) {
+    print(paste0("nested_shap_layers() started at ", Sys.time()))
+    tictoc::tic("nested_shap_layers()")
+  }
   
   ## Create shap layers in a list -----
-  ## Init & plot_df only
+  ### Initialize
+  .next_layers_x <- x
+  shap_layer_ls <- list()
+  layer_nms <- paste0(loc_attr_nm, "^", 1:n_shap_layers)
+  .mute <- sapply(1:n_shap_layers, function(i){
+    shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y, layer_nms[i],
+                                         verbose = verbose, noisy = noisy)
+    .next_layers_x <<- shap_layer_ls[[i]]$shap_df
+  })
+  names(shap_layer_ls) <- layer_nms
+  if(noisy == TRUE) beepr::beep(2)
+  return(shap_layer_ls)
+}
+
+format_nested_layers <- function(shap_layer_ls, x, y){
   sec_data_plot_df <- system.time({
     .m <- capture.output(gc())
     data_plot_df <- plot_df_of(x, y, d = 2, model = NULL, layer_name = "data")
   })[3]
-  .next_layers_X <- x
-  layer_ls <- list()
-  for(i in 1:N_shap_layers){
-    this_layer_nm <- paste0(loc_attr_nm, "^", i)
-    layer_ls[[i]] <- shap_layer_of(.next_layers_X, y, clas, this_layer_nm)
-    .next_layers_X <- layer_ls[[i]]$shap_df
-  }
-  
   ### rbind plot_df -----
   b_plot_df <- data.frame(data_plot_df)
-  .mute <- sapply(1:length(layer_ls), function(i){
-    this_plot_df <- layer_ls[[i]]$plot_df
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    this_plot_df <- shap_layer_ls[[i]]$plot_df
     b_plot_df <<- rbind(b_plot_df, this_plot_df)
   })
   
   ## performance of the layers
+  .nms <- names(shap_layer_ls)
   performance_df <- data.frame(NULL)
   model_ls <- list()
-  .mute <- sapply(1:length(layer_ls), function(i){
-    this_model <- layer_ls[[i]]$rf_model
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    this_model <- shap_layer_ls[[i]]$rf_model
     model_ls[[i]] <<- this_model
     performance_df <<- rbind(
       performance_df,
-      data.frame(names(layer_ls)[i], median(this_model$mse),
-                 median(sqrt(this_model$mse)), median(this_model$rsq))
+      data.frame(.nms[i],
+                 median(this_model$mse),
+                 median(sqrt(this_model$mse)),
+                 median(this_model$rsq),
+                 sum(shap_layer_ls[[i]]$time_df$runtime_seconds))
     )
   })
-  names(model_ls) <- names(layer_ls)
-  colnames(performance_df) <- c("layer_name", "median_mse", "median_rmse", "median_rsq")
+  names(model_ls) <- names(shap_layer_ls)
+  colnames(performance_df) <- c("layer", "median_mse",
+                                "median_rmse", "median_rsq", "runtime_seconds")
   
   ## Cbind decode table
   decode_df <- data.frame(rownum = 1:nrow(x), y)
-  .mute <- sapply(1:length(layer_ls), function(i){
-    this_rf_model <- layer_ls[[i]]$rf_model
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    this_rf_model <- shap_layer_ls[[i]]$rf_model
     decode_df <<- cbind(decode_df, y - predict(this_rf_model))
   })
   decode_df <- cbind(decode_df, x)
-  names(decode_df) <- c("rownum", "y", paste0("residual_", names(layer_ls)), names(X))
+  names(decode_df) <- c("rownum", "y", paste0("residual_", names(shap_layer_ls)), names(x))
   
   ## Cbind time_df
-  b_time_df <- data.frame(runtime_seconds = sec_data_plot_df, "maha/pca", "data")
-  .mute <- sapply(1:length(layer_ls), function(i){
-    b_time_df <<- cbind(decode_df, layer_ls[[i]]$time_df)
+  b_time_df <- data.frame(runtime_seconds = sec_data_plot_df,
+                          chunk = "maha/pca", layer = "data")
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    b_time_df <<- rbind(b_time_df, shap_layer_ls[[i]]$time_df)
   })
   
-  beepr::beep(2)
+  if(verbose == TRUE) tictoc::toc()
   return(list(plot_df = b_plot_df,
               decode_df = decode_df,
               performance_df = performance_df,
               time_df = b_time_df,
-              shap_layers = layer_ls))
+              model_ls = model_ls))
 }
-ret <- nested_shap_layers(X, Y)
 
+## FOR TESTING ##
+#### @examples
+#' X_train <- tourr::flea[, 2:6]
+#' Y <- tourr::flea[, 1]
+#################
+
+shap_layers_out <- nested_shap_layers(X_train, Y_train) ## ~ 3 x 16 min ~ 48 min.
+### Fifa, 80% training data
+# shap_layer_of shap^1: 674.57 sec elapsed
+# shap_layer_of shap^2: 616.25 sec elapsed
+# shap_layer_of shap^3: 621.67 sec elapsed
+formated_ls <- format_nested_layers(shap_layers_out, X_train, Y_train) ## fast
+names(formated_ls)
+formated_ls$plot_df
+formated_ls$decode_df
+formated_ls$performance_df
+formated_ls$time_df
+names(formated_ls$model_ls)
+
+
+### Validate against test data:
+str(X_test)
+mod_ls = form_shap_layers_out$model_ls; x_test = X_test; y_test = Y_test;
+.nms <- names(mod_ls)
+?randomForest:::predict.randomForest()
+performance_df_TEST <- data.frame(NULL)
+.mute <- sapply(1:length(mod_ls), function(i){
+  resid_vect <- 
+  rss <- sum((y_test - predict(mod_ls[[i]], x_test))^2)
+  tss <- sum((y_test - mean(y_test))^2)
+  rsq <- 1 - (tss/rss)
+  new_row <- data.frame(
+    .nms[i], mean(rss), sqrt(mean(rss)), rsq)
+  performance_df_TEST <<- rbind(performance_df_TEST, new_row)
+})
+colnames(performance_df_TEST) <- c("layer", "mse", "rmse", "rsq")
+performance_df_TEST
+
+caret::confusionMatrix(mod_ls[[1]], predict(mod_ls[[1]], X_test))
 
 ## visual expr ------
 ggp_expr <- expression({ ## Expression to assigning gg and ggp.
-  gg <- ret$plot_df %>%
+  gg <- formated_ls$plot_df %>%
     plotly::highlight_key(~rownum) %>%
     ggplot(aes(V1, V2, rownum = rownum,
                color = sqrt(maha_dist))) +
     ## Black Mis-classified points:
     geom_point(aes(V1, V2, rownum = rownum),
-               data = ret$plot_df[ret$plot_df$is_misclassified == TRUE,],
+               data = formated_ls$plot_df[formated_ls$plot_df$is_misclassified == TRUE,],
                color = "black", size = 3) +
     geom_point() +
     # ## Density contours, .99, .5, .1, .01
@@ -225,22 +284,29 @@ ggp_expr <- expression({ ## Expression to assigning gg and ggp.
     event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
     highlight(on = "plotly_selected", off = "plotly_deselect")
 })
-if(F)
+if(F){
   eval(ggp_expr); ggp
+}
 
 qq_expr <- expression({
-  
+  print("##TODO, qq_expr")
+})
+
+ggtime_expr <- expression({
+  print("##TODO, ggtime_expr")
 })
 
 ## EXPORT OBJECTS ----
 if(F){
-  save(ret,
+  formated_ls$model_ls <- NULL ## models are 97% of the size.
+  save(formated_ls,
        ggp_expr,
-       #qq_expr,
+       qq_expr, ## null
+       ggtime_expr, ## null
        file = "5regression_rf_dalex_nested_shaps.RData")
-  file.copy("./5regression_rf_dalex_nested_shaps.RData", to = "./apps/cheem_classification/data/5regression_rf_dalex_nested_shaps.RData", overwrite = TRUE)
+  file.copy("./5regression_rf_dalex_nested_shaps.RData", to = "./apps/cheem_regression/data/5regression_rf_dalex_nested_shaps.RData", overwrite = TRUE)
   file.remove("./5regression_rf_dalex_nested_shaps.RData")
 }
 if(F)
-  load("./apps/cheem_classification/data/5regression_rf_dalex_nested_shaps.RData")
+  load("./apps/cheem_regression/data/5regression_rf_dalex_nested_shaps.RData")
 
