@@ -75,13 +75,13 @@ maha_vect_of <- function(x, do_normalize = TRUE){ ## distance from median(x), co
   return(maha)
 }
 pca_df_of <- function(x, class, d = 2, do_normalize = TRUE){
-  pca <- as.matrix(x) %*% spinifex::basis_pca(x, d = d) 
-  if(do_normalize) pca <- spinifex::scale_01(pca) 
+  pca <- as.matrix(x) %*% spinifex::basis_pca(x, d)
+  if(do_normalize) pca <- spinifex::scale_01(pca)
   return(as.data.frame(pca))
 }
 plot_df_of <- function(x, y, d = 2, model = NULL, layer_name){ ## consumes maha&pca
   .maha <- maha_vect_of(x)
-  .pca <- pca_df_of(x, class, d = d)
+  .pca <- pca_df_of(x, class, d)
   if(is.null(model)){
     .resid <- NA
     .layer_ext <- layer_name
@@ -98,7 +98,9 @@ plot_df_of <- function(x, y, d = 2, model = NULL, layer_name){ ## consumes maha&
   return(.plot_df)
 }
 ### shap nesting function, and private functions/expressions -----
-shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2, 
+
+### One shap layer
+shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2,
                           verbose = TRUE, noisy = TRUE){
   if(verbose == TRUE) tictoc::tic(paste0("shap_layer_of ", layer_name))
   .is_y_disc <- is.factor(y) || is.character(y) || is.logical(y)
@@ -135,31 +137,7 @@ shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2,
               time_df = time_df))
 }
 
-## nested_shap_layers -----
-## Iterate and format for consumption
-nested_shap_layers <- function(x, y, n_shap_layers = 3, x_test, d = 2,
-                               verbose = TRUE, noisy = TRUE){
-  loc_attr_nm <- "shap"
-  if(verbose == TRUE) {
-    print(paste0("nested_shap_layers() started at ", Sys.time()))
-    tictoc::tic("nested_shap_layers()")
-  }
-  
-  ## Create shap layers in a list -----
-  ### Initialize
-  .next_layers_x <- x
-  shap_layer_ls <- list()
-  layer_nms <- paste0(loc_attr_nm, "^", 1:n_shap_layers)
-  .mute <- sapply(1:n_shap_layers, function(i){
-    shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y, layer_nms[i],
-                                         verbose = verbose, noisy = noisy)
-    .next_layers_x <<- shap_layer_ls[[i]]$shap_df
-  })
-  names(shap_layer_ls) <- layer_nms
-  if(noisy == TRUE) beepr::beep(2)
-  return(shap_layer_ls)
-}
-
+### Format many shap layers to usable df list.
 format_nested_layers <- function(shap_layer_ls, x, y){
   sec_data_plot_df <- system.time({
     .m <- capture.output(gc())
@@ -216,45 +194,86 @@ format_nested_layers <- function(shap_layer_ls, x, y){
               model_ls = model_ls))
 }
 
+
+## Create many layers and format
+nested_shap_layers <- function(x, y, n_shap_layers = 3, x_test, d = 2,
+                               verbose = TRUE, noisy = TRUE){
+  loc_attr_nm <- "shap"
+  if(verbose == TRUE) {
+    print(paste0("nested_shap_layers() started at ", Sys.time()))
+    tictoc::tic("nested_shap_layers()")
+  }
+  
+  ## Create shap layers in a list -----
+  ### Initialize
+  .next_layers_x <- x
+  shap_layer_ls <- list()
+  layer_nms <- paste0(loc_attr_nm, "^", 1:n_shap_layers)
+  layer_runtimes <- c(NULL)
+  .mute <- sapply(1:n_shap_layers, function(i){
+    shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y, layer_nms[i], d,
+                                         verbose, noisy)
+    .next_layers_x <<- shap_layer_ls[[i]]$shap_df
+    if(verbose == TRUE & i != n_shap_layers){
+      layer_runtimes[i] <- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
+      est_seconds_remaining <- round(sum(layer_runtimes) * n_shap_layers / 1)
+      print(paste0("Estimated seconds of runtime remaining: ", est_seconds_remaining,
+                   ". Estimated completion time: ", round(Sys.time() + est_seconds_remaining)
+      ))
+    }
+  })
+  names(shap_layer_ls) <- layer_nms
+  
+  ## Format into more usable dfs rather than layer lists
+  formated <- format_nested_layers(shap_layer_ls, x, y)
+  
+  if(noisy == TRUE) beepr::beep(2)
+  return(formated)
+}
+
 ## FOR TESTING ##
 #### @examples
 #' X_train <- tourr::flea[, 2:6]
 #' Y <- tourr::flea[, 1]
-#################
+################=
 
-shap_layers_out <- nested_shap_layers(X_train, Y_train) ## ~ 3 x 16 min ~ 48 min.
+if(F) ## Not run auto, ~32 min process::
+formated_ls <- nested_shap_layers(X_train, Y_train) ## ~ 3 x 16 min ~ 48 min.
 ### Fifa, 80% training data
 # shap_layer_of shap^1: 674.57 sec elapsed
 # shap_layer_of shap^2: 616.25 sec elapsed
 # shap_layer_of shap^3: 621.67 sec elapsed
-formated_ls <- format_nested_layers(shap_layers_out, X_train, Y_train) ## fast
+
 names(formated_ls)
 formated_ls$plot_df
 formated_ls$decode_df
 formated_ls$performance_df
 formated_ls$time_df
 names(formated_ls$model_ls)
-
+## performance doesn't seem to be commensurate with the performance I create manually
 
 ### Validate against test data:
-str(X_test)
-mod_ls = form_shap_layers_out$model_ls; x_test = X_test; y_test = Y_test;
-.nms <- names(mod_ls)
-?randomForest:::predict.randomForest()
-performance_df_TEST <- data.frame(NULL)
-.mute <- sapply(1:length(mod_ls), function(i){
-  resid_vect <- 
-  rss <- sum((y_test - predict(mod_ls[[i]], x_test))^2)
-  tss <- sum((y_test - mean(y_test))^2)
-  rsq <- 1 - (tss/rss)
-  new_row <- data.frame(
-    .nms[i], mean(rss), sqrt(mean(rss)), rsq)
-  performance_df_TEST <<- rbind(performance_df_TEST, new_row)
-})
-colnames(performance_df_TEST) <- c("layer", "mse", "rmse", "rsq")
-performance_df_TEST
-
-caret::confusionMatrix(mod_ls[[1]], predict(mod_ls[[1]], X_test))
+#model_ls = formated_ls$model_ls; x = X_test; y = Y_test;
+model_ls_performance <- function(model_ls, x, y){
+  
+  performance_df <- data.frame(NULL)
+  .mute <- sapply(1:length(model_ls), function(i){
+    resid_vect <- 
+      rss <- sum((y - predict(model_ls[[i]], x))^2)
+    tss <- sum((y - mean(y))^2)
+    rsq <- 1 - (tss/rss)
+    new_row <- data.frame(
+      .nms[i], mean(rss), sqrt(mean(rss)), rsq)
+    performance_df <<- rbind(performance_df, new_row)
+  })
+  colnames(performance_df) <- c("layer", "mse", "rmse", "rsq")
+  
+  return(performance_df)
+}
+perf_train <- model_ls_performance(formated_ls$model_ls, x = X_train, y = Y_train)
+perf_test  <- model_ls_performance(formated_ls$model_ls, x = X_test,  y = Y_test)
+perf_train
+perf_test 
 
 ## visual expr ------
 ggp_expr <- expression({ ## Expression to assigning gg and ggp.
