@@ -46,12 +46,15 @@ plot_df_of <- function(x, clas, d = 2){ ## uses maha/ olda
   .maha <- maha_vect_of(x)
   .olda <- olda_df_of(x, clas, d = d)
   .is_misclas <- predict(.rf) != Y
+  .sq_maha = quantile(.maha, seq(0, 1, length.out = nrow(x))) ## Sample(actual) quantiles of maha dist
+  .tq_maha = rnorm(nrow(x), mean(.maha), sd(.maha)) ## Theoretical quantiles of maha dist
   .qq_color <- colorRampPalette(c("grey", "red"))(100)[
     as.numeric(cut(.maha, breaks = 100))]
   .plot_df <- cbind(.olda, .maha, 1:nrow(X), Y, layer_name, "oLD",
-                    .is_misclas, .qq_color, order(.maha))
+                    .is_misclas, .tq_maha, .sq_maha, .qq_color, .tq_maha, order(.maha), 
+                    )
   names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer",
-                       "view", "is_misclassified", "manual_qq_color", "idx_maha_ord")
+                       "view", "is_misclassified", "tq_maha", "sq_maha", "qq_color", "idx_maha_ord")
 }
 
 ### shap nesting function -----
@@ -77,7 +80,7 @@ shap_layer_of <- function(X, Y, layer_name = "UNAMED", d = 2){ ## ASSUMES X, Y,
   maha_n_olda_expr <- expression({
     sec_maha_olda <- system.time({
       gc()
-      .plot_df  <- plot_df_of(.shap, Y, d)
+      .plot_df <- plot_df_of(.shap, Y, d)
     })[3]
   })
   
