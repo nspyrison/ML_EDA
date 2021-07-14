@@ -15,6 +15,30 @@ source("./apps/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and
 if(F) ## Manually run to view file:
   file.edit("./apps/trees_of_cheem.r")
 
+
+## FOR TESTING ##
+#' @examples
+#' X <- tourr::flea[, 2:6]
+#' Y <- tourr::flea[, 1]
+#' set.seed(303)
+#' .idx_test <- sample(1:nrow(X), size = round(.2 * nrow(X))) ### HOLD OUT TEST DATA.
+#' X_test  <- X[.idx_test,  ]
+#' X_train <- X[-.idx_test, ]
+#' Y_test  <- Y[ .idx_test]
+#' Y_train <- Y[-.idx_test]
+#' formated_ls <- nested_shap_layers(X_train, Y_train,
+#'                                   X_test, Y_test)
+#' formated_ls$performance_df
+#' 
+#' ## with "olda"
+#' print("Rdimtools::do.olda() not working atm.")
+#' # formated_ls <- nested_shap_layers(X_train, Y_train,
+#' #                                   X_test, Y_test,
+#' #                                   basis_type = "olda",
+#' #                                   class = tourr::flea$species)
+#' # formated_ls$performance_df
+
+
 ## Setup ------
 .raw <- DALEX::fifa
 .scaled <- .raw %>%
@@ -92,15 +116,11 @@ names(formated_ls)
 formated_ls$plot_df
 formated_ls$decode_df
 formated_ls$performance_df
+# formated_ls$performance_df2
 formated_ls$time_df
-names(formated_ls$model_ls)
+##names(formated_ls$model_ls)
 ## performance doesn't seem to be commensurate with the performance I create manually
 
-
-perf_train <- model_ls_performance(formated_ls$model_ls, x = X_train, y = Y_train)
-perf_test  <- model_ls_performance(formated_ls$model_ls, x = X_test,  y = Y_test)
-perf_train
-perf_test 
 
 ## visual expr ------
 ggp_expr <- expression({ ## Expression to assigning gg and ggp.

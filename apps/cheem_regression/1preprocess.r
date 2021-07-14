@@ -171,7 +171,7 @@ bound_spaces_df <- rbind(bnmds_dat ,
                          bpca_dat  ,
                          bpca_shap)
 .NN <- nrow(bound_spaces_df)
-.nms          <- rep_len(rownames(dat_fld), .NN)
+.nms <- rep_len(rownames(dat_fld), .NN)
 bound_spaces_df <- bound_spaces_df %>%
   mutate(info = paste0("row: ", rownum, ", ", .nms),
          rowname = .nms,

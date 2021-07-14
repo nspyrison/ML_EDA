@@ -25,46 +25,45 @@ rnorm_observation_of <- function(data){
 ### Util functions, SHAP layers
 
 #### Normalized mahalonobis distances | given median, covar
-maha_vect_of <- function(x, do_normalize = TRUE){ ## distance from median(x), cov(x)
+
+#### projection space df of
+plot_df_of <- function(x, y, basis_type = c("pca", "olda"), class = NULL, ## class req for olda
+                       d = 2, layer_name){
+  ## maha_vect_of
+  #maha_vect_of <- function(x, do_normalize = TRUE){ ## distance from median(x), cov(x)
   maha <- mahalanobis(x, apply(x, 2, median), cov(x)) %>%
     matrix(ncol = 1)
-  if(do_normalize) maha <- spinifex::scale_01(maha)
-  return(maha)
-}
-#### projection space df of
-proj_df_of <- function(x, basis_type = c("pca", "olda"), class, ## class req for olda
-                       d = 2, do_normalize = TRUE){
+  maha <- spinifex::scale_01(maha)
+  
+  ## proj_df_of
+  # proj_df_of <- function(x, basis_type = c("pca", "olda"), class, ## class req for olda
+  #                        d = 2, do_normalize = TRUE){
   basis_type <- match.arg(basis_type)
   basis <- switch(basis_type,
-                  pca = spinifex::basis_pca(x, d),
+                  pca = prcomp(x)$rotation[, 1:d], #spinifex::basis_pca(x, d),
                   olda = spinifex::basis_olda(x, class, d))
   proj <- as.matrix(x) %*% basis
-  if(do_normalize == TRUE) proj <- spinifex::scale_01(proj)
-  return(as.data.frame(proj))
-}
-plot_df_of <- function(x, y, basis_type = c("pca", "olda"), class = NULL, ## class req for olda
-                       d = 2, model = NULL, layer_name){ ## consumes maha&pca
-  .maha <- maha_vect_of(x)
-  .proj <- proj_df_of(x, basis_type, class, d)
-  if(is.null(model)){
-    .resid <- NA
-    .layer_ext <- layer_name
-  }else{
-    .resid <- y - predict(model)
-    .layer_ext <- paste0(layer_name, "\n SMSE: ", round(sum(model$mse), 1))
-  }
+  proj <- spinifex::scale_01(proj) %>%  as.data.frame()
+  
+  ## bind
   .qq_color <- colorRampPalette(c("grey", "red"))(100)[
-    as.numeric(cut(.maha, breaks = 100))]
-  .plot_df <- cbind(.proj, .maha, 1:nrow(x), y, .layer_ext, "PCA",
-                    .resid, .qq_color, order(.maha))
+    as.numeric(cut(maha, breaks = 100))]
+  .plot_df <- cbind(proj, maha, 1:nrow(x), y, layer_name, basis_type, .qq_color)
+  ## add quantiles and order
+  .q_idx <- order(maha)
+  .probs <- seq(0, 1, length.out = nrow(x))
+  .qs <- quantile(maha, probs = .probs)
+  .qt <- qnorm(.probs, mean(maha), sd(maha))
+  .plot_df <- cbind(.plot_df[.q_idx, ], .qs, .qt)
   names(.plot_df) <-
-    c(paste0("V", 1:d), "maha_dist", "rownum", "species", "var_layer",
-      "view", "residual", "manual_qq_color", "idx_maha_ord")
+    c(paste0("V", 1:d), "maha_dist", "rownum", "y", "var_layer", "view",
+      "qq_color", "quantile_theoretical", "quantile_maha_dist")
   return(.plot_df)
 }
 
 ### One shap layer
-shap_layer_of <- function(x, y, layer_name = "UNAMED", 
+shap_layer_of <- function(x, y, xtest = NULL, ytest = NULL,
+                          layer_name = "UNAMED",
                           basis_type = c("pca", "olda"), class = NULL, d = 2, ## class req for olda
                           verbose = TRUE, noisy = TRUE){
   require("treeshap")
@@ -84,65 +83,113 @@ shap_layer_of <- function(x, y, layer_name = "UNAMED",
     .rf <- randomForest::randomForest(y~., data = data.frame(y, x),
                                       mtry = .hp_mtry, nodesize = .hp_node)
   })[3]
+  
+  ## RF performance,
+  ### MANUALLY created, and different than the performance created by the rf fit...
+  .resid <- y - predict(.rf, x)
+  .rss <- sum(.resid^2)
+  .tss <- sum((y - mean(y))^2)
+  .mse <- 1 / nrow(x) * .rss %>% round(2)
+  .rmse <- sqrt(.mse) %>% round(2)
+  .rsq <- 1 - (.rss/.tss) %>% round(4)
+  .performance_df <- data.frame(mse = .mse, rmse = .rmse, rsq = .rsq)
+  if(is.null(xtest) == FALSE & is.null(ytest) == FALSE){
+    .rss_t <- sum((ytest - predict(.rf, xtest))^2)
+    .tss_t <- sum((ytest - mean(ytest))^2)
+    .mse_t <- 1 / nrow(x) * .rss_t %>% round(2)
+    .rmse_t <- sqrt(.mse_t) %>% round(2)
+    .rsq_t <- 1 - (.rss_t/.tss_t) %>% round(4)
+    .performance_df$test_mse  <- .mse_t
+    .performance_df$test_rmse <- .rmse_t
+    .performance_df$test_rsq  <- .rsq_t
+  }
+  
+  ## plot_df_of x, .rf, NOT SHAP
+  sec_maha_pca <- system.time({
+    .m <- capture.output(gc())
+    .plot_df <- plot_df_of(
+      x, y, basis_type, class, d,
+      layer_name = paste0(layer_name, " \n rmse = ", .rmse))
+  })[3]
+  
   ## treeshap
   sec_shap <- system.time({
     .m <- capture.output(gc())
     .shap <- treeshap_df(.rf, x)
-  })[3]
-  ## plot_df_of shap
-  sec_maha_pca <- system.time({
-    .m <- capture.output(gc())
-    .plot_df <- plot_df_of(.shap, y, basis_type, class, d, .rf, layer_name)
+    .shap_xtest <- NULL ## init
+    if(is.null(xtest) == FALSE) .shap_xtest <- treeshap_df(.rf, xtest)
   })[3]
   
   ## Execution time
-  time_df <- data.frame(runtime_seconds = c(sec_rf, sec_shap, sec_maha_pca),
-                        chunk = c("rf model", "(rf) treeshap shap", "maha/pca"),
-                        layer = layer_name)
+  time_df <- data.frame(
+    runtime_seconds = c(sec_rf, sec_shap, sec_maha_pca),
+    chunk = c("rf model", "(rf) treeshap shap", "maha/pca"),
+    layer = layer_name)
   
   if(verbose == TRUE) tictoc::toc()
   if(noisy == TRUE) beepr::beep(1)
   return(list(plot_df = .plot_df,
               rf_model = .rf,
+              performance_df = .performance_df,
               shap_df = .shap,
+              shap_xtest_df = .shap_xtest,
               time_df = time_df))
 }
+
+
+#' @examples
+#' X <- tourr::flea[, 2:6]
+#' Y <- tourr::flea[, 1]
+#' set.seed(303)
+#' .idx_test <- sample(1:nrow(X), size = round(.5 * nrow(X))) ### HOLD OUT TEST DATA.
+#' X_test  <- X[.idx_test,  ]
+#' X_train <- X[-.idx_test, ]
+#' Y_test  <- Y[ .idx_test]
+#' Y_train <- Y[-.idx_test]
+#' x <- X_train; y = Y_train; x_test = X_test; y_test = Y_test;
+#' formated_ls <- nested_shap_layers(X_train, Y_train,
+#'                                   X_test, Y_test)
+#' formated_ls$performance_df
 
 ### Format many shap layers
 format_nested_layers <- function(shap_layer_ls, x, y,
                                  basis_type = c("pca", "olda"), class = NULL, d = 2,
                                  verbose = TRUE){
-  sec_data_plot_df <- system.time({
-    .m <- capture.output(gc())
-    data_plot_df <- plot_df_of(x, y, basis_type, class, d, model = NULL, layer_name = "data")
-  })[3]
   ### rbind plot_df
-  b_plot_df <- data.frame(data_plot_df)
+  b_plot_df <- data.frame()
   .mute <- sapply(1:length(shap_layer_ls), function(i){
     this_plot_df <- shap_layer_ls[[i]]$plot_df
     b_plot_df <<- rbind(b_plot_df, this_plot_df)
   })
   
-  browser()
-  ### performance of the layers
-  .nms <- names(shap_layer_ls)
-  performance_df <- data.frame(NULL)
-  model_ls <- list()
-  .mute <- sapply(1:length(shap_layer_ls), function(i){
-    model_ls[[i]] <<- shap_layer_ls[[i]]$rf_model
-    this_row <- data.frame(.nms[i],
-                           sum(shap_layer_ls[[i]]$time_df$runtime_seconds),
-                           median(model_ls[[i]]$mse),
-                           median(sqrt(model_ls[[i]]$mse)),
-                           median(model_ls[[i]]$rsq))
-    performance_df <<- rbind(performance_df, this_row)
-  })
-  performance_df[, 2:ncol(performance_df)] <-
-    round(performance_df[, 2:ncol(performance_df)], 2)
-  names(model_ls) <- names(shap_layer_ls)
-  colnames(performance_df) <- c("layer", "runtime_seconds", "median_mse",
-                                "median_rmse", "median_rsq")
+  # ### performance of the layers
+  # .nms <- names(shap_layer_ls)
+  # performance_df <- data.frame(NULL)
+  # model_ls <- list()
+  # .mute <- sapply(1:length(shap_layer_ls), function(i){
+  #   model_ls[[i]] <<- shap_layer_ls[[i]]$rf_model
+  #   this_row <- data.frame(.nms[i],
+  #                          sum(shap_layer_ls[[i]]$time_df$runtime_seconds),
+  #                          median(model_ls[[i]]$mse),
+  #                          median(sqrt(model_ls[[i]]$mse)),
+  #                          median(model_ls[[i]]$rsq))
+  #   performance_df <<- rbind(performance_df, this_row)
+  # })
+  # performance_df[, 2:ncol(performance_df)] <-
+  #   round(performance_df[, 2:ncol(performance_df)], 2)
+  # names(model_ls) <- names(shap_layer_ls)
+  # colnames(performance_df) <- c("layer", "runtime_seconds", "median_mse",
+  #                               "median_rmse", "median_rsq")
   
+  ### performance2 of the layers, manual performance
+  .nms <- names(shap_layer_ls)
+  performance_df2 <- data.frame(NULL)
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    .row <- shap_layer_ls[[i]]$performance_df
+    .row$runtime_seconds <- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
+    performance_df2 <<- rbind(performance_df2, .row)
+  })
+  row.names(performance_df2) <- .nms
   
   ### Cbind decode table
   decode_df <- data.frame(rownum = 1:nrow(x), y)
@@ -151,11 +198,19 @@ format_nested_layers <- function(shap_layer_ls, x, y,
     decode_df <<- cbind(decode_df, y - predict(this_rf_model))
   })
   decode_df <- cbind(decode_df, x)
-  names(decode_df) <- c("rownum", "y", paste0("residual_", names(shap_layer_ls)), names(x))
+  names(decode_df) <-
+    c("rownum", "y", paste0("residual_", names(shap_layer_ls)), names(x))
   
-  ### Cbind time_df
-  b_time_df <- data.frame(runtime_seconds = sec_data_plot_df,
-                          chunk = "maha/pca", layer = "data")
+  ### Rbind shap_df
+  b_shap_df <- data.frame()
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    .shap_df <- cbind(shap_layer_ls[[i]]$shap_df, .nms[i])
+    b_shap_df <<- rbind(b_shap_df, .shap_df)
+  })
+  colnames(b_shap_df) <- c(colnames(shap_layer_ls[[1]]$shap_df), "layer_name")
+  
+  ### Rbind time_df
+  b_time_df <- data.frame()
   .mute <- sapply(1:length(shap_layer_ls), function(i){
     b_time_df <<- rbind(b_time_df, shap_layer_ls[[i]]$time_df)
   })
@@ -163,15 +218,18 @@ format_nested_layers <- function(shap_layer_ls, x, y,
   if(verbose == TRUE) tictoc::toc()
   return(list(plot_df = b_plot_df,
               decode_df = decode_df,
-              performance_df = performance_df,
-              time_df = b_time_df,
-              model_ls = model_ls))
+              #performance_df = performance_df,
+              performance_df = performance_df2,
+              shap_df = b_shap_df, 
+              time_df = b_time_df
+              #, model_ls = model_ls ## almost all of the object size.
+  ))
 }
 
 
 ## Final SHAP layer function
-nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL, 
-                               n_shap_layers = 3, x_test = NULL, 
+nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
+                               n_shap_layers = 3,
                                basis_type = c("pca", "olda"), class = NULL, d = 2,
                                verbose = TRUE, noisy = TRUE){
   loc_attr_nm <- "shap"
@@ -184,19 +242,23 @@ nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
   }
   
   ### Create shap layers in a list
-  .next_layers_x <- x
+  .next_layers_x <- x ## Init
+  .next_layers_xtest <- xtest ## Init
   shap_layer_ls <- list()
   layer_nms <- paste0(loc_attr_nm, "^", 1:n_shap_layers)
   layer_runtimes <- c(NULL)
   .mute <- sapply(1:n_shap_layers, function(i){
     shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y,
+                                         .next_layers_xtest, ytest,
                                          layer_nms[i],
                                          basis_type, class, d,
                                          verbose, noisy)
     .next_layers_x <<- shap_layer_ls[[i]]$shap_df
+    .next_layers_xtest <<- shap_layer_ls[[i]]$shap_xtest_df ## Could be NULL
     if(verbose == TRUE & i != n_shap_layers){
       layer_runtimes[i] <<- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
-      est_seconds_remaining <- round(sum(layer_runtimes) * n_shap_layers / 1)
+      est_seconds_remaining <-
+        round(sum(layer_runtimes) / i * (n_shap_layers - i) / n_shap_layers)
       print(paste0("Estimated seconds of runtime remaining: ", est_seconds_remaining,
                    ". Estimated completion time: ", round(Sys.time() + est_seconds_remaining)
       ))
@@ -211,31 +273,6 @@ nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
   if(noisy == TRUE) beepr::beep(2)
   return(formated)
 }
-
-### Validate against test data:
-#' @example
-#' model_ls = formated_ls$model_ls; x = X_test; y = Y_test;
-model_ls_performance <- function(model_ls, x, y, xtest, ytest){
-  performance_df <- data.frame(NULL)
-  .nms <- names(model_ls)
-  .mute <- sapply(1:length(model_ls), function(i){
-    # resid <- predict(model_ls[[i]], x)
-    # rmse <- sd(resid)
-    rss <- sum((y - predict(model_ls[[i]], x))^2)
-    tss <- sum((y - mean(y))^2)
-    mse <- 1 / nrow(x) * rss
-    rmse <- sqrt(mse)
-    rsq <- 1 - (rss/tss)
-    
-    new_row <- c(.nms[i], round(c(rmse^2, rmse), 1), round(rsq, 3))
-    performance_df <<- rbind(performance_df, new_row)
-  })
-  colnames(performance_df) <- c("layer", "mse", "rmse", "rsq")
-  
-  return(performance_df)
-}
-
-
 
 
 
@@ -254,7 +291,7 @@ model_ls_performance <- function(model_ls, x, y, xtest, ytest){
 treeshap_df <- function(randomForest_model, data){
   .rfu <- treeshap::randomForest.unify(randomForest_model, data)
   .tshap_ls <- treeshap::treeshap(.rfu, x = data) 
-  .tshap_ls <- .tshap_ls[c(1,4)]
+  .tshap_ls <- .tshap_ls[c(1, 4)]
   ## Keeping only c(1,4); reduces ~98.5% of the obj size, keep shap values make data attr.
   ## But, we lose the iBreakdown-like plot of treeshap::plot_contribution when we take this apart.
   ret <- .tshap_ls[[1]]
@@ -286,7 +323,7 @@ local_attribution_df <- function(
   model = randomForest::randomForest(
     x    = target_var~.,
     data = data.frame(target_var, data),
-    mtry = if(plyr::is.discrete(tgt_var)) sqrt(ncol(data)) else ncol(data) / 3L),
+    mtry = if(plyr::is.discrete(tgt_var)) sqrt(ncol(data)) else ncol(data) / 3),
   parts_type = c("shap", "break_down", "oscillations", "oscillations_uni", "oscillations_emp"),
   parts_B = 10,
   parts_N = if(substr(parts_type, 1, 4) == "osci") 500 else NULL, ## see DALEX::predict_parts
@@ -299,7 +336,7 @@ local_attribution_df <- function(
   .p <- ncol(data)
   .n <- nrow(data)
   
-  if(plyr::is.discrete(target_var) & length(unique(target_var)) > 2L)
+  if(plyr::is.discrete(target_var) & length(unique(target_var)) > 2)
     stop("Not expecting multiclass discrete target variable, try looping over target variable testing against each level.")
   ## Explanation of the model
   .ex <- DALEX::explain(model = model, ## Has heavy model, needed for predict_parts.
@@ -310,7 +347,7 @@ local_attribution_df <- function(
   ## predict the parts, iterating over each each observation
   ret <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
   r_seq <- round(seq(0, nrow(data), length.out = 11)[-1])
-  sapply(1L:nrow(data), function(i){
+  sapply(1:nrow(data), function(i){
     .parts <- DALEX::predict_parts(explainer = .ex,
                                    new_observation =  data[i,, drop = FALSE],
                                    type = parts_type,
