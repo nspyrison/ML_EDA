@@ -75,7 +75,7 @@ detach("package:caret", unload = TRUE)
 encoded <- cbind(encoded[, 1:3], encoded[, 11:12], xdat)
 
 ## Additional setup not used in local attribution matrix
-new_obs_x <- rnorm_observation(xdat)
+new_obs_x <- rnorm_observation_of(xdat)
 ```
 
 ## Check data space

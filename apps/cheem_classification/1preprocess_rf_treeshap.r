@@ -12,9 +12,9 @@ require("palmerpenguins") ## data
 require("caret") ## Modeling
 require("plotly") ## Linked brushing
 ## Local files
-source("./apps/cheem_classification/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
+source("./apps/trees_of_cheem.r") ## Local functions, esp. for basis_cheem() and view_cheem()
 if(F) ## Manually run to view file:
-  file.edit("./apps/cheem_classification/trees_of_cheem.r")
+  file.edit("./apps/trees_of_cheem.r")
 
 
 ## Normalized mahalonobis distances | given median, covar

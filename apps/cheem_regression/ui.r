@@ -5,7 +5,6 @@
 #### Dependencies -----
 ## EDA and utility
 require("ggplot2")
-require("GGally")
 require("plotly")
 require("magrittr")
 ## Shiny specific
@@ -14,16 +13,12 @@ require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 require("DT") ## For html table and buttons
 
-## Local functions
-source("trees_of_cheem.r")   ## Cheem functions
-# source("spinifex_ggproto.r") ## New (spinifex) ggproto_* api
-## Load objs
+## Load prepared objs
 load("./data/1preprocess.RData") ## Loads the objects: dat, bound_spaces_df
-if(F)
+if(F) ## Not run
+  ## Load objects
   load("./apps/cheem_regression/data/1preprocess.RData")
-if(F){ ## Not run, source/open local function files relative to proj
-  source("./apps/cheem_regression/trees_of_cheem.r")
-  file.edit("./apps/cheem_regression/trees_of_cheem.r")
+  ## Open file
   file.edit("./apps/cheem_regression/1preprocess.r")
 }
 

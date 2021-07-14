@@ -1,20 +1,242 @@
-require("ranger")
+## Leg work
 require("treeshap")
 require("DALEX")
 require("spinifex")
-require("tourr")
+## Util
+require("magrittr")
+require("tictoc")
+require("beepr")
 require("ggplot2")
 
-is.discrete <- function(x) ## see plyr::is.discrete(). !! not on levels, class only
-{is.factor(x) || is.character(x) || is.logical(x)}
+is.discrete <- function(x){ ## see plyr::is.discrete(). !! not on levels, class only
+  is.factor(x) || is.character(x) || is.logical(x)}
 
-rnorm_observation <- function(data){
+rnorm_observation_of <- function(data){
   c_mns <- apply(data, 2L, mean)
   c_var <- apply(data, 2L, var)
-  obs_vec <- rnorm(ncol(data), c_mns, sqrt(c_var))
-  obs <- as.data.frame(matrix(obs_vec, nrow = 1L, dimnames = list(NULL, colnames(data))))
-  return(obs)
+  return(as.data.frame(
+    matrix(rnorm(ncol(data), c_mns, sqrt(c_var)),
+           nrow = 1L, dimnames = list(NULL, colnames(data)))
+  ))
 }
+
+## SHAP layers --------
+
+### Util functions, SHAP layers
+maha_vect_of <- function(x, do_normalize = TRUE){ ## distance from median(x), cov(x)
+  maha <- mahalanobis(x, apply(x, 2, median), cov(x)) %>%
+    matrix(ncol = 1)
+  if(do_normalize) maha <- spinifex::scale_01(maha)
+  return(maha)
+}
+pca_df_of <- function(x, class, d = 2, do_normalize = TRUE){
+  pca <- as.matrix(x) %*% spinifex::basis_pca(x, d)
+  if(do_normalize) pca <- spinifex::scale_01(pca)
+  return(as.data.frame(pca))
+}
+plot_df_of <- function(x, y, d = 2, model = NULL, layer_name){ ## consumes maha&pca
+  .maha <- maha_vect_of(x)
+  .pca <- pca_df_of(x, class, d)
+  if(is.null(model)){
+    .resid <- NA
+    .layer_ext <- layer_name
+  }else{
+    .resid <- y - predict(model)
+    .layer_ext <- paste0(layer_name, "\n SMSE: ", round(sum(model$mse), 1))
+  }
+  .qq_color <- colorRampPalette(c("grey", "red"))(100)[
+    as.numeric(cut(.maha, breaks = 100))]
+  .plot_df <- cbind(.pca, .maha, 1:nrow(x), y, .layer_ext, "PCA",
+                    .resid, .qq_color, order(.maha))
+  names(.plot_df) <- c("V1", "V2", "maha_dist", "rownum", "species", "var_layer",
+                       "view", "residual", "manual_qq_color", "idx_maha_ord")
+  return(.plot_df)
+}
+
+### One shap layer
+shap_layer_of <- function(x, y, layer_name = "UNAMED", d = 2,
+                          verbose = TRUE, noisy = TRUE){
+  require("treeshap")
+  if(noisy   == TRUE) require("beepr")
+  if(verbose == TRUE){
+    require("tictoc")
+    tictoc::tic(paste0("shap_layer_of ", layer_name))
+  }
+  
+  ## RF model
+  .is_y_disc <- is.factor(y) || is.character(y) || is.logical(y)
+  sec_rf <- system.time({
+    .m <- capture.output(gc())
+    .hp_mtry <- if(.is_y_disc == TRUE) sqrt(ncol(x)) else ncol(x) / 3
+    .hp_node <- max(if(.is_y_disc == TRUE) 1 else 5, ceiling(nrow(x) / 500))
+    .rf <- randomForest::randomForest(y~., data = data.frame(y, x),
+                                      mtry = .hp_mtry, nodesize = .hp_node)
+  })[3]
+  ## treeshap
+  sec_shap <- system.time({
+    .m <- capture.output(gc())
+    .shap <- treeshap_df(.rf, x)
+  })[3]
+  ## plot_df_of shap
+  sec_maha_pca <- system.time({
+    .m <- capture.output(gc())
+    .plot_df <- plot_df_of(.shap, y, d, .rf, layer_name)
+  })[3]
+  
+  ## Watching performance
+  time_df <- data.frame(runtime_seconds = c(sec_rf, sec_shap, sec_maha_pca),
+                        chunk = c("rf model", "(rf) treeshap shap", "maha/pca"),
+                        layer = layer_name)
+  
+  if(verbose == TRUE) tictoc::toc()
+  if(noisy == TRUE) beepr::beep(1)
+  return(list(plot_df = .plot_df,
+              rf_model = .rf,
+              shap_df = .shap,
+              time_df = time_df))
+}
+
+### Format many shap layers
+format_nested_layers <- function(shap_layer_ls, x, y, verbose = TRUE){
+  sec_data_plot_df <- system.time({
+    .m <- capture.output(gc())
+    data_plot_df <- plot_df_of(x, y, d = 2, model = NULL, layer_name = "data")
+  })[3]
+  ### rbind plot_df
+  b_plot_df <- data.frame(data_plot_df)
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    this_plot_df <- shap_layer_ls[[i]]$plot_df
+    b_plot_df <<- rbind(b_plot_df, this_plot_df)
+  })
+  
+  ### performance of the layers
+  .nms <- names(shap_layer_ls)
+  performance_df <- data.frame(NULL)
+  model_ls <- list()
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    this_model <- shap_layer_ls[[i]]$rf_model
+    model_ls[[i]] <<- this_model
+    performance_df <<- rbind(
+      performance_df,
+      data.frame(.nms[i],
+                 median(this_model$mse),
+                 median(sqrt(this_model$mse)),
+                 median(this_model$rsq),
+                 sum(shap_layer_ls[[i]]$time_df$runtime_seconds))
+    )
+  })
+  names(model_ls) <- names(shap_layer_ls)
+  colnames(performance_df) <- c("layer", "median_mse",
+                                "median_rmse", "median_rsq", "runtime_seconds")
+  
+  ### Cbind decode table
+  decode_df <- data.frame(rownum = 1:nrow(x), y)
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    this_rf_model <- shap_layer_ls[[i]]$rf_model
+    decode_df <<- cbind(decode_df, y - predict(this_rf_model))
+  })
+  decode_df <- cbind(decode_df, x)
+  names(decode_df) <- c("rownum", "y", paste0("residual_", names(shap_layer_ls)), names(x))
+  
+  ### Cbind time_df
+  b_time_df <- data.frame(runtime_seconds = sec_data_plot_df,
+                          chunk = "maha/pca", layer = "data")
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    b_time_df <<- rbind(b_time_df, shap_layer_ls[[i]]$time_df)
+  })
+  
+  if(verbose == TRUE) tictoc::toc()
+  return(list(plot_df = b_plot_df,
+              decode_df = decode_df,
+              performance_df = performance_df,
+              time_df = b_time_df,
+              model_ls = model_ls))
+}
+
+
+## Final SHAP layer function
+nested_shap_layers <- function(x, y, n_shap_layers = 3, x_test, d = 2,
+                               verbose = TRUE, noisy = TRUE){
+  loc_attr_nm <- "shap"
+  require("treeshap")
+  if(noisy == TRUE) require("beepr")
+  if(verbose == TRUE) {
+    require("tictoc")
+    print(paste0("nested_shap_layers() started at ", Sys.time()))
+    tictoc::tic("nested_shap_layers()")
+  }
+  
+  ### Create shap layers in a list
+  .next_layers_x <- x
+  shap_layer_ls <- list()
+  layer_nms <- paste0(loc_attr_nm, "^", 1:n_shap_layers)
+  layer_runtimes <- c(NULL)
+  .mute <- sapply(1:n_shap_layers, function(i){
+    shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y, layer_nms[i], d,
+                                         verbose, noisy)
+    .next_layers_x <<- shap_layer_ls[[i]]$shap_df
+    if(verbose == TRUE & i != n_shap_layers){
+      layer_runtimes[i] <- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
+      est_seconds_remaining <- round(sum(layer_runtimes) * n_shap_layers / 1)
+      print(paste0("Estimated seconds of runtime remaining: ", est_seconds_remaining,
+                   ". Estimated completion time: ", round(Sys.time() + est_seconds_remaining)
+      ))
+    }
+  })
+  names(shap_layer_ls) <- layer_nms
+  
+  ### Format into more usable dfs rather than layer lists
+  formated <- format_nested_layers(shap_layer_ls, x, y, verbose)
+  
+  if(noisy == TRUE) beepr::beep(2)
+  return(formated)
+}
+
+## FOR TESTING ##
+#### @examples
+#' X_train <- tourr::flea[, 2:6]
+#' Y <- tourr::flea[, 1]
+################=
+
+if(F) ## Not run auto, ~32 min process::
+  formated_ls <- nested_shap_layers(X_train, Y_train) ## ~ 3 x 16 min ~ 48 min.
+### Fifa, 80% training data
+# shap_layer_of shap^1: 674.57 sec elapsed
+# shap_layer_of shap^2: 616.25 sec elapsed
+# shap_layer_of shap^3: 621.67 sec elapsed
+
+names(formated_ls)
+formated_ls$plot_df
+formated_ls$decode_df
+formated_ls$performance_df
+formated_ls$time_df
+names(formated_ls$model_ls)
+## performance doesn't seem to be commensurate with the performance I create manually
+
+### Validate against test data:
+#model_ls = formated_ls$model_ls; x = X_test; y = Y_test;
+model_ls_performance <- function(model_ls, x, y){
+  
+  performance_df <- data.frame(NULL)
+  .mute <- sapply(1:length(model_ls), function(i){
+    resid_vect <- 
+      rss <- sum((y - predict(model_ls[[i]], x))^2)
+    tss <- sum((y - mean(y))^2)
+    rsq <- 1 - (tss/rss)
+    new_row <- data.frame(
+      .nms[i], mean(rss), sqrt(mean(rss)), rsq)
+    performance_df <<- rbind(performance_df, new_row)
+  })
+  colnames(performance_df) <- c("layer", "mse", "rmse", "rsq")
+  
+  return(performance_df)
+}
+
+
+
+
+
+## SHAP data frames -----
 
 #' @examples
 #' dat <- DALEX::apartments[, 1:5]
@@ -124,48 +346,10 @@ local_attribution_df <- function(
   return(ret)
 }
 
-#' @examples
-#' ## Discrete supervised classification RF
-#' dat <- spinifex::scale_sd(mtcars)
-#' y <- dat[, 1]
-#' x <- dat[, -1]
-#' mod <- randomForest::randomForest(mpg~., data = dat)
-#' 
-#' la_df <- local_attribution_df(data = x, target_var = y, model = mod)
-#' feat_df <- feature_df(la_df, mod)
-feature_df <- function(local_attribution, model){ #, y = model$y, x = attr(local_attribution, "data")){ ## local_attr_df contains x
-  ## Normalized mahalonobis distances (median, covar) ----
-  maha_vect_of <- function(x, do_normalize = TRUE){ ## dist from in-class column median(x), cov(x)
-    maha <- mahalanobis(x, apply(x, 2L, median), cov(x)) %>%
-      matrix(ncol = 1)
-      if(do_normalize) maha <- scale_01(maha) 
-      return(maha)
-  }
-  x <- attr(local_attribution, "data")
-  y <- model$y
-  
-  pred      <- predict(model, newdata = x)
-  maha_data <- maha_vect_of(x)
-  maha_shap <- maha_vect_of(local_attribution)
-  
-  data.frame(rownum = 1:nrow(local_attribution),
-             y = model$y,
-             prediction = pred,
-             residual = model$y - pred,
-             maha_shap = maha_shap,
-             maha_data = maha_data,
-             maha_delta = maha_shap - maha_data)
-}
-
-create_grid <- function(x, n_pts = 20){
-  .x <- x[,1]
-  .y <- x[,1]
-  .xpts <- seq(min(.x), max(.x), length.out = n_pts)
-  .ypts <- seq(min(.y), max(.y), length.out = n_pts)
-  expand.grid(X1 = .xpts, X2 = .ypts)
-}
 
 
+
+## SHAP as basis component: ----
 
 #' @example
 #' ## Discrete supervised classification

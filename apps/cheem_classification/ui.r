@@ -13,13 +13,11 @@ require("shinythemes") ## Themes for shiny, think preset css styling.
 require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 require("DT") ## For html table and buttons
 if(F){ ## Not run, source/open local function files relative to proj
-  source("./apps/cheem_classification/trees_of_cheem.r")
   load("./apps/cheem_classification/data/1preprocess_rf_treeshap.RData")
   load("./apps/cheem_classification/data/2preprocess_rf_dalex.RData")
   load("./apps/cheem_classification/data/3preprocess_svm_dalex.RData")
   load("./apps/cheem_classification/data/4nested_rf_dalexshap.RData")
   ##
-  file.edit("./apps/cheem_classification/trees_of_cheem.r")
   file.edit("./apps/cheem_classification/1preprocess_rf_treeshap.r")
   file.edit("./apps/cheem_classification/2preprocess_rf_dalex.r")
   file.edit("./apps/cheem_classification/3preprocess_svm_dalex.r")

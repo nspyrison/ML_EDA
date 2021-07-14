@@ -20,18 +20,18 @@ In terms of workflow and model specificity:
 knitr::include_graphics("./images/cheem_workflow.png")
 ```
 
-## Repo Structure
+<!-- ## Repo Structure -->
 
-The case studies that produce the videos and still images found in the paper
-can be reproduced in R via running the files found in the `scripts` directory. 
- 
+<!-- The case studies that produce the videos and still images found in the paper -->
+<!-- can be reproduced in R via running the files found in the `scripts` directory.  -->
 
-```{r, echo = FALSE, }
-fs::dir_tree(recurse = TRUE,  
-             type = c("file", "directory"),
-             glob = c("*.png|*.pdf|*.cls|*.bib|*.html"),
-             invert = TRUE)
-```
+
+<!-- ```{r, echo = FALSE, } -->
+<!-- fs::dir_tree(recurse = TRUE,   -->
+<!--              type = c("file", "directory"), -->
+<!--              glob = c("*.png|*.pdf|*.cls|*.bib|*.html"), -->
+<!--              invert = TRUE) -->
+<!-- ``` -->
 
 ## Namesake
 
