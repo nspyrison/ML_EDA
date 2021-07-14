@@ -66,8 +66,36 @@ X_train <- X[-.idx_test, ]
 Y_test  <- Y[ .idx_test]
 Y_train <- Y[-.idx_test]
 
-## Local functions -----
-## Normalized mahalonobis distances | given median, covar
+### RUN SHAP LAYERS
+
+## FOR TESTING ##
+#' @examples
+#' X <- tourr::flea[, 2:6]
+#' Y <- tourr::flea[, 1]
+#' set.seed(303)
+#' .idx_test <- sample(1:nrow(X), size = round(.5 * nrow(X))) ### HOLD OUT TEST DATA.
+#' X_test  <- X[.idx_test,  ]
+#' X_train <- X[-.idx_test, ]
+#' Y_test  <- Y[ .idx_test]
+#' Y_train <- Y[-.idx_test]
+#' x <- X_train; y = Y_train; x_test = X_test; y_test = Y_test;
+################=
+
+if(F) ## Not run auto, ~32 min process::
+  formated_ls <- nested_shap_layers(X_train, Y_train) ## ~ 3 x 16 min ~ 48 min.
+### Fifa, 80% training data
+# shap_layer_of shap^1: 674.57 sec elapsed
+# shap_layer_of shap^2: 616.25 sec elapsed
+# shap_layer_of shap^3: 621.67 sec elapsed
+
+names(formated_ls)
+formated_ls$plot_df
+formated_ls$decode_df
+formated_ls$performance_df
+formated_ls$time_df
+names(formated_ls$model_ls)
+## performance doesn't seem to be commensurate with the performance I create manually
+
 
 perf_train <- model_ls_performance(formated_ls$model_ls, x = X_train, y = Y_train)
 perf_test  <- model_ls_performance(formated_ls$model_ls, x = X_test,  y = Y_test)
