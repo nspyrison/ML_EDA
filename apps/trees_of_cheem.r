@@ -28,7 +28,7 @@ rnorm_observation_of <- function(data){
 
 #### projection space df of
 plot_df_of <- function(x, y, basis_type = c("pca", "olda"), class = NULL, ## class req for olda
-                       d = 2, layer_name){
+                       d = 2, layer_name, residuals){
   ## maha_vect_of
   #maha_vect_of <- function(x, do_normalize = TRUE){ ## distance from median(x), cov(x)
   maha <- mahalanobis(x, apply(x, 2, median), cov(x)) %>%
@@ -48,15 +48,15 @@ plot_df_of <- function(x, y, basis_type = c("pca", "olda"), class = NULL, ## cla
   ## bind
   .qq_color <- colorRampPalette(c("grey", "red"))(100)[
     as.numeric(cut(maha, breaks = 100))]
-  .plot_df <- cbind(proj, maha, 1:nrow(x), y, layer_name, basis_type, .qq_color)
+  .plot_df <- cbind(proj, maha, 1:nrow(x), y, residuals, layer_name, basis_type, .qq_color)
   ## add quantiles and order
   .q_idx <- order(maha)
-  .probs <- seq(0, 1, length.out = nrow(x))
+  .probs <- seq(.01, .99, length.out = nrow(x))
   .qs <- quantile(maha, probs = .probs)
   .qt <- qnorm(.probs, mean(maha), sd(maha))
   .plot_df <- cbind(.plot_df[.q_idx, ], .qs, .qt)
   names(.plot_df) <-
-    c(paste0("V", 1:d), "maha_dist", "rownum", "y", "var_layer", "view",
+    c(paste0("V", 1:d), "maha_dist", "rownum", "y", "residual", "var_layer", "view",
       "qq_color", "quantile_theoretical", "quantile_maha_dist")
   return(.plot_df)
 }
@@ -109,7 +109,8 @@ shap_layer_of <- function(x, y, xtest = NULL, ytest = NULL,
     .m <- capture.output(gc())
     .plot_df <- plot_df_of(
       x, y, basis_type, class, d,
-      layer_name = paste0(layer_name, " \n rmse = ", .rmse))
+      layer_name = paste0(layer_name, " \n rmse = ", .rmse),
+      residual = .resid)
   })[3]
   
   ## treeshap
@@ -127,7 +128,7 @@ shap_layer_of <- function(x, y, xtest = NULL, ytest = NULL,
     layer = layer_name)
   
   if(verbose == TRUE) tictoc::toc()
-  if(noisy == TRUE) beepr::beep(1)
+  if(noisy == TRUE & sum(time_df$runtime_seconds) > 10) beepr::beep(1)
   return(list(plot_df = .plot_df,
               rf_model = .rf,
               performance_df = .performance_df,
@@ -162,6 +163,16 @@ format_nested_layers <- function(shap_layer_ls, x, y,
     b_plot_df <<- rbind(b_plot_df, this_plot_df)
   })
   
+  ### performance2 of the layers, manual performance
+  .nms <- names(shap_layer_ls)
+  performance_df2 <- data.frame(NULL)
+  .mute <- sapply(1:length(shap_layer_ls), function(i){
+    .row <- shap_layer_ls[[i]]$performance_df
+    .row$runtime_seconds <- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
+    performance_df2 <<- rbind(performance_df2, .row)
+  })
+  row.names(performance_df2) <- .nms
+  
   # ### performance of the layers
   # .nms <- names(shap_layer_ls)
   # performance_df <- data.frame(NULL)
@@ -181,16 +192,6 @@ format_nested_layers <- function(shap_layer_ls, x, y,
   # colnames(performance_df) <- c("layer", "runtime_seconds", "median_mse",
   #                               "median_rmse", "median_rsq")
   
-  ### performance2 of the layers, manual performance
-  .nms <- names(shap_layer_ls)
-  performance_df2 <- data.frame(NULL)
-  .mute <- sapply(1:length(shap_layer_ls), function(i){
-    .row <- shap_layer_ls[[i]]$performance_df
-    .row$runtime_seconds <- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
-    performance_df2 <<- rbind(performance_df2, .row)
-  })
-  row.names(performance_df2) <- .nms
-  
   ### Cbind decode table
   decode_df <- data.frame(rownum = 1:nrow(x), y)
   .mute <- sapply(1:length(shap_layer_ls), function(i){
@@ -200,6 +201,8 @@ format_nested_layers <- function(shap_layer_ls, x, y,
   decode_df <- cbind(decode_df, x)
   names(decode_df) <-
     c("rownum", "y", paste0("residual_", names(shap_layer_ls)), names(x))
+  if(is.na(as.numeric(rownames(x)[1])) == FALSE) ## does first rowname contain letters
+    decode_df$tt <- paste0("rn: ", decode_df$rownum, rownames(decode_df))
   
   ### Rbind shap_df
   b_shap_df <- data.frame()
@@ -245,7 +248,7 @@ nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
   .next_layers_x <- x ## Init
   .next_layers_xtest <- xtest ## Init
   shap_layer_ls <- list()
-  layer_nms <- c("data", paste0(loc_attr_nm, "^", 1:(n_shap_layers-1)))
+  layer_nms <- c("data", paste0(loc_attr_nm, "^", 1:(n_shap_layers - 1)))
   layer_runtimes <- c(NULL)
   .mute <- sapply(1:n_shap_layers, function(i){
     shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y,
@@ -255,13 +258,13 @@ nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
                                          verbose, noisy)
     .next_layers_x <<- shap_layer_ls[[i]]$shap_df
     .next_layers_xtest <<- shap_layer_ls[[i]]$shap_xtest_df ## Could be NULL
-    if(verbose == TRUE & i != n_shap_layers){
-      layer_runtimes[i] <<- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
-      est_min_remaining <- round(sum(layer_runtimes) / i * (n_shap_layers - i) / 60, 1)
-      print(paste0("Estimated min of runtime remaining: ", est_min_remaining,
-                   ". Estimated completion time: ", round(Sys.time() + est_min_remaining * 60)
-      ))
-    }
+    # if(verbose == TRUE & i != n_shap_layers){
+    #   layer_runtimes[i] <<- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
+    #   est_min_remaining <- round(sum(layer_runtimes) / i * (n_shap_layers - i) / 60, 1)
+    #   #print(paste0("Estimated min of runtime remaining: ", est_min_remaining,
+    #                ". Estimated completion time: ", round(Sys.time() + est_min_remaining * 60)
+    #   ))
+    # }
   })
   names(shap_layer_ls) <- layer_nms
   

@@ -30,31 +30,33 @@ X <- dat
 Y <- as.integer(clas1 == lvls[1])
 ## Split for train/test.
 set.seed(303)
-.idx_test <- sample(1:nrow(X), size = round(.2 * nrow(X))) ### HOLD OUT TEST DATA.
+.idx_test <- sample(1:nrow(X), size = round(.1 * nrow(X))) ### HOLD OUT TEST DATA.
 X_test  <- X[.idx_test,  ]
 X_train <- X[-.idx_test, ]
 Y_test  <- Y[ .idx_test]
 Y_train <- Y[-.idx_test]
 
-## Run nested shaps
+## Run nested shaps -----
 formated_ls <- nested_shap_layers(X_train, Y_train,
                                   X_test, Y_test,
-                                  n_shap_layers = 5)
-## nested_shap_layers(): 9.22 sec elapsed
+                                  n_shap_layers = 8)
+## nested_shap_layers(): 9.22 sec elapsed (5 layers)
 formated_ls$performance_df
 names(formated_ls)
+str(formated_ls$plot_df)
 
 
 ## visual expr ------
 ggp_expr <- expression({ ## Expression to assigning gg and ggp.
   gg <- formated_ls$plot_df %>%
     plotly::highlight_key(~rownum) %>%
-    ggplot(aes(V1, V2, rownum = rownum,
-               color = (maha_dist))) +
-    ## Black Mis-classified points:
-    geom_point(aes(V1, V2, rownum = rownum),
-               data = formated_ls$plot_df[formated_ls$plot_df$is_misclassified == TRUE,],
-               color = "black", size = 3) +
+    ggplot(aes(V1, V2,
+               color = (maha_dist),
+               shape = as.factor(y))) +
+    # ## Black misclassified points, those with abs(residual) > .5
+    # geom_point(aes(V1, V2),
+    #            data = formated_ls$plot_df[abs(formated_ls$plot_df$residual) > .5, ],
+    #            color = "black", size = 3) +
     geom_point() +
     # ## Density contours, .99, .5, .1, .01
     # geom_density2d(aes((V1, V2), color = "black",
@@ -67,7 +69,7 @@ ggp_expr <- expression({ ## Expression to assigning gg and ggp.
     scale_color_gradient2(name = "mahalonobis \n distance, within layer",
                           low = "blue", mid = "grey", high = "red")
   ## BOX SELECT
-  ggp <- ggplotly(gg, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+  ggp <- ggplotly(gg, tooltip = "tooltip") %>% ## Tooltip by name of var name/aes mapping arg.
     config(displayModeBar = FALSE) %>% ## Remove html buttons
     layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
     event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
@@ -92,7 +94,7 @@ qq_expr <- expression({
     #                  yend = quantile(quantile_maha_dist ^.5, probs = .75, na.rm = T))
     # ) +
     theme_bw() +
-    labs(x = "Theoretical quantiles", y = "Square root of Maha distance", 
+    labs(x = "Theoretical quantiles", y = "Square root of Maha distance",
          title = "QQ plots, (square root maha dist)") +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank())
@@ -112,7 +114,7 @@ if(F){
   formated_ls$model_ls <- NULL ## models are 97% of the size.
   save(formated_ls,
        ggp_expr,
-       qq_expr, ## null
+       qq_expr,
        ggtime_expr, ## null
        file = "5regression_rf_treeshap_nested_shaps.RData")
   file.copy("./5regression_rf_treeshap_nested_shaps.RData", to = "./apps/cheem_classification/data/5regression_rf_treeshap_nested_shaps.RData", overwrite = TRUE)
@@ -130,9 +132,9 @@ if(F){
       plotly::highlight_key(~rownum) %>%
       ggplot(aes(V1, V2, rownum = rownum,
                  color = sqrt(maha_dist))) +
-      ## Black Mis classified:
-      geom_point(aes(V1, V2, rownum = rownum), 
-                 data = b_plot_df[b_plot_df$is_misclassified == TRUE,],
+      ## Black Mi- classified: 
+      geom_point(aes(V1, V2, rownum = rownum),
+                 data = b_plot_df[b_plot_df$is_misclassified == TRUE, ],
                  color = "black", size = 3) +
       geom_point() +
       # ## Density contours, .99, .5, .1, .01
