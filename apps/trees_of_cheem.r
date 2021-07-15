@@ -245,7 +245,7 @@ nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
   .next_layers_x <- x ## Init
   .next_layers_xtest <- xtest ## Init
   shap_layer_ls <- list()
-  layer_nms <- paste0(loc_attr_nm, "^", 1:n_shap_layers)
+  layer_nms <- c("data", paste0(loc_attr_nm, "^", 1:(n_shap_layers-1)))
   layer_runtimes <- c(NULL)
   .mute <- sapply(1:n_shap_layers, function(i){
     shap_layer_ls[[i]] <<- shap_layer_of(.next_layers_x, y,
@@ -257,10 +257,9 @@ nested_shap_layers <- function(x, y, xtest = NULL, ytest = NULL,
     .next_layers_xtest <<- shap_layer_ls[[i]]$shap_xtest_df ## Could be NULL
     if(verbose == TRUE & i != n_shap_layers){
       layer_runtimes[i] <<- sum(shap_layer_ls[[i]]$time_df$runtime_seconds)
-      est_seconds_remaining <-
-        round(sum(layer_runtimes) / i * (n_shap_layers - i) / n_shap_layers)
-      print(paste0("Estimated seconds of runtime remaining: ", est_seconds_remaining,
-                   ". Estimated completion time: ", round(Sys.time() + est_seconds_remaining)
+      est_min_remaining <- round(sum(layer_runtimes) / i * (n_shap_layers - i) / 60, 1)
+      print(paste0("Estimated min of runtime remaining: ", est_min_remaining,
+                   ". Estimated completion time: ", round(Sys.time() + est_min_remaining * 60)
       ))
     }
   })

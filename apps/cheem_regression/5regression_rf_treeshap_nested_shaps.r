@@ -92,34 +92,22 @@ Y_train <- Y[-.idx_test]
 
 ### RUN SHAP LAYERS
 
-## FOR TESTING ##
-#' @examples
-#' X <- tourr::flea[, 2:6]
-#' Y <- tourr::flea[, 1]
-#' set.seed(303)
-#' .idx_test <- sample(1:nrow(X), size = round(.5 * nrow(X))) ### HOLD OUT TEST DATA.
-#' X_test  <- X[.idx_test,  ]
-#' X_train <- X[-.idx_test, ]
-#' Y_test  <- Y[ .idx_test]
-#' Y_train <- Y[-.idx_test]
-#' x <- X_train; y = Y_train; x_test = X_test; y_test = Y_test;
-################=
-
-if(F) ## Not run auto, ~32 min process::
-  formated_ls <- nested_shap_layers(X_train, Y_train) ## ~ 3 x 16 min ~ 48 min.
-### Fifa, 80% training data
-# shap_layer_of shap^1: 674.57 sec elapsed
-# shap_layer_of shap^2: 616.25 sec elapsed
-# shap_layer_of shap^3: 621.67 sec elapsed
-
-names(formated_ls)
-formated_ls$plot_df
-formated_ls$decode_df
+if(F) ## Not run auto, ~11-14 min PER LAYER, 
+  formated_ls <- nested_shap_layers(X_train, Y_train,
+                                    X_test, Y_test,
+                                    n_shap_layers = 3) ## ~ 3 x 16 min ~ 48 min.
+### Fifa, 80% trainingng data, but also shap of 20% test;
+# [1] "nested_shap_layers() started at 2021-07-15 11:32:21"
+# shap_layer_of shap^1: 841.95 sec elapsed
+# [1] "Estimated seconds of runtime remaining: 561. Estimated completion time: 2021-07-15 11:55:45"
+# shap_layer_of shap^2: 804.61 sec elapsed
+# [1] "Estimated seconds of runtime remaining: 274. Estimated completion time: 2021-07-15 12:04:22"
+# shap_layer_of shap^2: 804.61 sec elapsed
+# [1] "Estimated seconds of runtime remaining: 274. Estimated completion time: 2021-07-15 12:04:22"
+# shap_layer_of shap^3: 800.7 sec elapsed
+# nested_shap_layers(): 2447.44 sec elapsed
 formated_ls$performance_df
-# formated_ls$performance_df2
-formated_ls$time_df
-##names(formated_ls$model_ls)
-## performance doesn't seem to be commensurate with the performance I create manually
+names(formated_ls)
 
 
 ## visual expr ------
@@ -155,7 +143,29 @@ if(F){
 }
 
 qq_expr <- expression({
-  print("##TODO, qq_expr")
+  qq <- formated_ls$plot_df %>%
+    plotly::highlight_key(~rownum) %>%
+    ggplot() +
+    facet_grid(rows = vars(var_layer)) +
+    geom_point(aes(x = quantile_theoretical,
+                   y = quantile_maha_dist ^(1/2)),
+               color = formated_ls$plot_df$qq_color, stat="identity") +
+    ggplot2::scale_color_identity() +
+    # geom_segment(aes(x    = quantile(quantile_theoretical,   probs = .25, na.rm = T),
+    #                  y    = quantile(quantile_maha_dist ^.5, probs = .25, na.rm = T),
+    #                  xend = quantile(quantile_theoretical,   probs = .75, na.rm = T),
+    #                  yend = quantile(quantile_maha_dist ^.5, probs = .75, na.rm = T))
+    # ) +
+    theme_bw() +
+    labs(x = "theoretical", y = "Square root of observations", 
+         title = "QQ plots, (square root maha dist)") +
+    theme(axis.text  = element_blank(),
+          axis.ticks = element_blank())
+  # ggplotly(q, tooltip = "rownum") %>% ## Tooltip by name of var name/aes mapping arg.
+  #   config(displayModeBar = FALSE) %>% ## Remove html buttons
+  #   layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
+  #   event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
+  #   highlight(on = "plotly_selected", off = "plotly_deselect")
 })
 
 ggtime_expr <- expression({
@@ -167,7 +177,7 @@ if(F){
   formated_ls$model_ls <- NULL ## models are 97% of the size.
   save(formated_ls,
        ggp_expr,
-       qq_expr, ## null
+       qq_expr,
        ggtime_expr, ## null
        file = "5regression_rf_dalex_nested_shaps.RData")
   file.copy("./5regression_rf_dalex_nested_shaps.RData", to = "./apps/cheem_regression/data/5regression_rf_dalex_nested_shaps.RData", overwrite = TRUE)
