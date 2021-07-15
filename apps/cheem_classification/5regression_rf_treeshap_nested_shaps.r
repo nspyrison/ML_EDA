@@ -78,11 +78,6 @@ if(F)
 
 
 qq_expr <- expression({
-  # dat <- formated_ls$plot_df
-  # seg_df <- data.frame(x    = quantile(dat$quantile_theoretical,   probs = .25, na.rm = T),
-  #                      y    = quantile(dat$quantile_maha_dist ^.5, probs = .25, na.rm = T),
-  #                      xend = quantile(dat$quantile_theoretical,   probs = .75, na.rm = T),
-  #                      yend = quantile(dat$quantile_maha_dist ^.5, probs = .75, na.rm = T))
   qq <- formated_ls$plot_df %>%
     plotly::highlight_key(~rownum) %>%
     ggplot() +
@@ -97,7 +92,7 @@ qq_expr <- expression({
     #                  yend = quantile(quantile_maha_dist ^.5, probs = .75, na.rm = T))
     # ) +
     theme_bw() +
-    labs(x = "theoretical", y = "Square root of observations", 
+    labs(x = "Theoretical quantiles", y = "Square root of Maha distance", 
          title = "QQ plots, (square root maha dist)") +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank())

@@ -138,9 +138,9 @@ ggp_expr <- expression({ ## Expression to assigning gg and ggp.
     event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
     highlight(on = "plotly_selected", off = "plotly_deselect")
 })
-if(F){
+if(F)
   eval(ggp_expr); ggp
-}
+
 
 qq_expr <- expression({
   qq <- formated_ls$plot_df %>%
@@ -151,13 +151,8 @@ qq_expr <- expression({
                    y = quantile_maha_dist ^(1/2)),
                color = formated_ls$plot_df$qq_color, stat="identity") +
     ggplot2::scale_color_identity() +
-    # geom_segment(aes(x    = quantile(quantile_theoretical,   probs = .25, na.rm = T),
-    #                  y    = quantile(quantile_maha_dist ^.5, probs = .25, na.rm = T),
-    #                  xend = quantile(quantile_theoretical,   probs = .75, na.rm = T),
-    #                  yend = quantile(quantile_maha_dist ^.5, probs = .75, na.rm = T))
-    # ) +
     theme_bw() +
-    labs(x = "theoretical", y = "Square root of observations", 
+    labs(x = "Theoretical quantiles", y = "Square root of Maha distance",
          title = "QQ plots, (square root maha dist)") +
     theme(axis.text  = element_blank(),
           axis.ticks = element_blank())
@@ -179,10 +174,10 @@ if(F){
        ggp_expr,
        qq_expr,
        ggtime_expr, ## null
-       file = "5regression_rf_dalex_nested_shaps.RData")
-  file.copy("./5regression_rf_dalex_nested_shaps.RData", to = "./apps/cheem_regression/data/5regression_rf_dalex_nested_shaps.RData", overwrite = TRUE)
-  file.remove("./5regression_rf_dalex_nested_shaps.RData")
+       file = "5regression_rf_treeshap_nested_shaps.RData")
+  file.copy("./5regression_rf_treeshap_nested_shaps.RData", to = "./apps/cheem_regression/data/5regression_rf_treeshap_nested_shaps.RData", overwrite = TRUE)
+  file.remove("./5regression_rf_treeshap_nested_shaps.RData")
 }
 if(F)
-  load("./apps/cheem_regression/data/5regression_rf_dalex_nested_shaps.RData")
+  load("./apps/cheem_regression/data/5regression_rf_treeshap_nested_shaps.RData")
 

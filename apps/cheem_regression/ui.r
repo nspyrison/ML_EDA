@@ -14,70 +14,38 @@ require("shinycssloaders") ## Esp. for renderPlot() %>% withSpinner(type = 8L)
 require("DT") ## For html table and buttons
 
 ## Load prepared objs
-load("./data/1preprocess.RData") ## Loads the objects: dat, bound_spaces_df
-if(F) ## Not run
+load("./data/5regression_rf_treeshap_nested_shaps.RData")
+
+## Loads the objects: 
+# formated_ls,
+# ggp_expr,
+# qq_expr,
+if(F){ ## Not run
   ## Load objects
-  load("./apps/cheem_regression/data/1preprocess.RData")
+  load("./apps/cheem_regression/data/5regression_rf_treeshap_nested_shaps.RData")
   ## Open file
-  file.edit("./apps/cheem_regression/1preprocess.r")
+  file.edit("./apps/cheem_regression/5regression_rf_treeshap_nested_shaps.r")
 }
 
 ## Prep gg plot -----
-## grey and color pts
-df <- bound_spaces_df
-idx_dat  <- df$maha_dat  > quantile(df$maha_dat, probs = .98)
-idx_shap <- df$maha_shap > quantile(df$maha_shap, probs = .98)
-pts_idx <- idx_dat | idx_shap
-grey_pts_idx <- !pts_idx
-sum(pts_idx)/4
-## find txt pts
-idx_dat  <- df$maha_dat  > quantile(df$maha_dat, probs = .999)
-idx_shap <- df$maha_shap > quantile(df$maha_shap, probs = .999)
-txt_pts_idx <- idx_dat | idx_shap
-sum(txt_pts_idx)/4
-## Plot
-g <- df[pts_idx, ] %>%
-  ## Plotly interaction key
-  plotly::highlight_key(~rownum) %>%
-  ggplot(aes(V1, V2)) +
-  ## Grey points
-  geom_point(aes(shape = maha_shape), data = df[grey_pts_idx, ], color = "grey") +
-  ## Density contours, .99, .5, .1, .01
-  geom_density2d(aes(V1, V2), df, color = "black",
-                 contour_var = "ndensity", breaks = c(.1, .5, .9, .99)) +
-  ## Color points
-  geom_point(aes(info = info, color = maha_color,
-                 shape = maha_shape)) +
-  ## Text points
-  geom_text(aes(label = rowname), df[txt_pts_idx, ], color = "blue") +
-  facet_grid(rows = vars(obs_type), cols = vars(var_space), scales = "free") +
-  theme_bw() +
-  theme(axis.text  = element_blank(),
-        axis.ticks = element_blank()) +
-  scale_color_gradient2(name = "Mahalonobis \n delta, shap - data",
-                        low = "blue", mid = "grey", high = "red") +
-  # scale_color_continuous(name = "Normal \n Mahalonobis \n distances, \n crossed", 
-  #                        type = "viridis") +
-  scale_shape_discrete(name = "")
+eval(ggp_expr) ## Makes gg, and ggp
+eval(qq_expr)  ## Makes qq
+names(formated_ls)
 
 
 ##### tab1_cheem ----
 tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
   ## Top input row ----
   fluidRow(
-    # column(width = 4L,
-    #        ## Maha lookup
-    #        h4("Mahalonobis lookup table"),
-    #        DT::DTOutput("maha_lookup_DT", width = "100%") %>%
-    #          shinycssloaders::withSpinner(type = 8L)
-    # ),
     column(width = 8L,
            h3("FIFA 2020, preprocess:"),
            p("1) Take the original 42 attributes, hold wages (in Euros) as our target Y, aggregate correlated variables down to 8 X, skill attributes."),
-           p("2) Remove the goalkeepers, (should be fit with different model), 9.3% of rows."),
-           p("3) Create a Random Forest model predicting wages given our 8 skill attributes. (~12 sec)"),
-           p("4) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, via {treeshap}, (~900 sec))."),
-           p("5) Extract mMDS (~480 sec), pca, and mahalonobist dist for both data and SHAP values."),
+           p("2) Remove the goalkeepers, 9.3% of rows."),
+           p("3) Hold 20% of fielders to validate the fit."),
+           p("4) Create a Random Forest model predicting wages given our 8 skill attributes. (~12 sec)"),
+           p("5) Extract the SHAP matrix, that is SHAP values for EACH observation (in-sample, obs of a random forest model, via {treeshap}, (~900 sec))."),
+           p("6) Extract pca, and mahalonobis distance for ploting."),
+           p("7) Replicate steps 4 to 6 on the newly created shap sapces."),
            p("- Load above objects into shiny app; explore with ggplot2/plotly.")
     )
   ),
@@ -88,15 +56,23 @@ tab1_cheem <- tabPanel(title = "SHAP sensitivity -- FIFA", fluidPage(
     h3("FIFA 2020 Fielders"),
     h4("Explore sensitivity of the SHAP matrix against that the original data."),
     p("Highlighting points: click, or click and drag to select, double click to remove the selection."),
-    p("Black contours: contours on projection density c(.1, ,.5, .9, .99)"),
-    p("Colored points: players with top 2% maha distances in data or shap space."),
     p("Blue text: players with top 0.1% maha distances in data or shap space."),
-    plotly::plotlyOutput("main_plot", width = "100%", height = "600px") %>%
-      shinycssloaders::withSpinner(type = 8L),
+    fluidRow(
+      column(width = 7L,
+             plotly::plotlyOutput("main_plot", width = "100%", height = "600px") %>%
+               shinycssloaders::withSpinner(type = 8L)
+      ),
+      column(width = 5L,
+             plotOutput("qq_plot", width = "100%", height = "600px") %>%
+               shinycssloaders::withSpinner(type = 8L)
+      )
+    ),
     shiny::hr(),
     h4("Selected data:"),
-    verbatimTextOutput("selected_plot_df"), ## What ggplotly sees
-    DT::DTOutput("selected_df")
+    DT::DTOutput("selected_df"),
+    shiny::hr(),
+    h4("Model performance:"),
+    verbatimTextOutput("performance_df")
   )
 )) ## Assign tab1_cheem
 

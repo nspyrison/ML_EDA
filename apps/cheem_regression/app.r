@@ -13,26 +13,20 @@ server <- function(input, output, session){
   outputOptions(output, "maha_lookup_DT", suspendWhenHidden = FALSE) ## Eager evaluation
   
   ## main_plot -----
-  output$main_plot <- plotly::renderPlotly({
-    ## BOX SELECT
-    ggplotly(g, tooltip = "info") %>% ## Tooltip by name of var name/aes mapping arg.
-      config(displayModeBar = FALSE) %>% ## Remove html buttons
-      layout(dragmode = "select") %>% ## Set drag left mouse to section box from zoom window
-      event_register("plotly_selected") %>% ## Register based on "selected", on the release of th mouse button.
-      highlight(on = "plotly_selected", off = "plotly_deselect")
-  })
+  output$main_plot <- plotly::renderPlotly(ggp)
+  output$qq_plot <- renderPlot(qq)
   
-  ## Selection data lookup ------
-  output$selected_plot_df <- renderPrint({
-    d <- event_data("plotly_selected")
-    if (is.null(d)) "Selected point appears here (double-click to clear)" # else d
-  })
   ## Rows of original data
   output$selected_df <- DT::renderDT({ ## Original data of selection
     d <- event_data("plotly_selected")
     if (is.null(d)) return(NULL)
-    return(DT::datatable(dat[dat$rownum %in% d$key, ], rownames = TRUE))
+    return(DT::datatable(
+      formated_ls$decode_df[formated_ls$decode_df$rownum %in% d$key, ],
+      rownames = TRUE))
   })
+  
+  ## performance df
+  output$performance_df <- shiny::renderPrint(formated_ls$performance_df)
 } ### close function, assigning server.
 
 shinyApp(ui = ui, server = server)
